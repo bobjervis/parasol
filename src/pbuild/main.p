@@ -50,8 +50,6 @@ class PBuildCommand extends process.Command {
 					"Parasol Compiler Version " + runtime.image.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
-		versionManifestOption = stringOption('m', "manifest",
-					"Designates a version manifest to be used to set version strings in the built products");
 		installContextOption = stringOption('i', "install",
 					"Designates a Parasol context, into which the command-line arguments designating package " +
 					"products are to be installed" +
@@ -98,7 +96,6 @@ class PBuildCommand extends process.Command {
 	}
 
 	ref<process.Option<string>> installContextOption;
-	ref<process.Option<string>> versionManifestOption;
 	ref<process.Option<string>> buildDirOption;
 	ref<process.Option<string>> buildFileOption;
 	ref<process.Option<int>> buildThreadsOption;
@@ -141,12 +138,6 @@ public int main(string[] args) {
 	if (!coordinator.validate()) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();
-	}
-	if (pbuildCommand.versionManifestOption.set()) {
-		if (!coordinator.applyManifest(pbuildCommand.versionManifestOption.value)) {
-			printf("FAIL: Errors encountered trying to apply version manifest scripts.\n");
-			pbuildCommand.help();
-		}
 	}
 	// Note: if the build files contain any 'after_pass' scripts, those will be exec'ed
 	// from inside this function, and it will not return.

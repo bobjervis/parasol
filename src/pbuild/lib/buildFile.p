@@ -18,10 +18,27 @@ namespace parasol:pbuild;
 import parasol:script;
 import parasol:storage;
 
+public class MacroSet {
+	private string[string] _macros;
+
+	boolean define(string name, string value) {
+		if (_macros.contains(name))
+			return false;
+		_macros[name] = value;
+		return true;
+	}
+
+	string find(string name) {
+		return _macros[name];
+	}
+}
+
 public class BuildFile {
 	public ref<Suite>[] tests;
 	public ref<Product>[] products;
 
+	private ref<MacroSet> _macroSet;
+	private boolean _macrosAllocated;
 	private string _buildFile;
 	private string _targetOS;
 	private string _targetCPU;
@@ -32,22 +49,30 @@ public class BuildFile {
 	private ref<BuildRoot> _buildRoot;
 
 	BuildFile(string buildFile, void (string, string, var...) errorMessage, string targetOS, string targetCPU, 
-			  ref<Coordinator> coordinator) {
+			  ref<Coordinator> coordinator, ref<MacroSet> macroSet) {
 		_buildFile = buildFile;
 		_targetOS = targetOS;
 		_targetCPU = targetCPU;
 		_errorMessage = errorMessage;
 		_coordinator = coordinator;
+		if (macroSet == null) {
+			_macroSet = new MacroSet;
+			_macrosAllocated = true;
+		} else
+			_macroSet = macroSet;
 	}
 
 	~BuildFile() {
 		tests.deleteAll();
 		delete _parser;
 //		delete _buildRoot;
+		if (_macrosAllocated)
+			delete _macroSet;
 	}
 
 	public static ref<BuildFile> parse(string buildFile, string content, void (string, string, var...) errorMessage, 
-									   string targetOS, string targetCPU, ref<Coordinator> coordinator, string outputDir) {
+									   string targetOS, string targetCPU, ref<Coordinator> coordinator, string outputDir, 
+									   ref<MacroSet> macroSet) {
 		if (coordinator.verbose()) {
 			if (buildFile != null)
 				printf("Parse build file %s", buildFile);
@@ -59,10 +84,14 @@ public class BuildFile {
 				printf(" cpu %s", targetCPU);
 			if (outputDir != null)
 				printf(" output %s", outputDir);
+			if (macroSet != null)
+				printf(" imported");
+			else
+				printf(" stand-alone");
 			printf("\n");
 		}
 		boolean success = true;
-		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU, coordinator);
+		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU, coordinator, macroSet);
 
 		if (content != null)
 			bf._parser = script.Parser.loadFromString(buildFile, content);
@@ -267,6 +296,28 @@ public class BuildFile {
 				}
 				break;
 			
+			case "import":
+				if (enclosing != null && enclosing.class != BuildRoot)
+					error(object, "An import cannot be declared inside a component");
+				_coordinator.parseBuildFile(this, object);
+				break;
+
+			case "define":
+				props := object.properties();
+				for (key in *props) {
+					prop := (*props)[key];
+					switch (key) {
+					case	"tag":
+					case	"content":
+					case	"parent":
+						break;
+
+					default:
+						_macroSet.define(key, prop.toString());
+					}
+				}
+				break;
+
 			default:
 				error(object, "Unknown tag '%s'", object.get("tag").toString());
 			}
@@ -278,6 +329,47 @@ public class BuildFile {
 		return success;
 	}
 
+	public string, boolean expandMacros(ref<script.Atom> atom) {
+		src := atom.toString();
+		string dest;
+		boolean success = true;
+
+		for (int i = 0; i < src.length(); i++) {
+			c := src[i];
+			if (c == '$') {
+				n := referenceSpan(&src[i + 1]);
+				if (n < 0)
+					dest.append(c);
+				else {
+					nm := src.substr(i + 2, i + n - 1);
+					i += n;
+					v := _macroSet.find(nm);
+					if (v != null)
+						dest.append(v);
+					else {
+						dest += "${" + nm + "}";
+						success = false;
+					}
+				}
+			} else
+	        	dest.append(c);
+		}
+		return dest, success;
+	}
+
+	private static int referenceSpan(pointer<byte> bp) {
+		if (*bp != '{')
+			return -1;
+		span := 2;
+		while (*bp != '}') {
+			if (*bp == 0)
+				return -1;
+			span++;
+			bp++;
+		}
+		return span;
+	}
+
 	void error(ref<script.Atom> a, string msg, var... args) {
 		_detectedErrors = true;
 		_parser.log.error(a != null ? a.offset() : 0, msg, args);
@@ -285,6 +377,18 @@ public class BuildFile {
 
 	ref<Coordinator> coordinator() {
 		return _coordinator;
+	}
+
+	ref<BuildRoot> buildRoot() {
+		return _buildRoot;
+	}
+
+	ref<MacroSet> macroSet() {
+		return _macroSet;
+	}
+
+	string path() {
+		return _buildFile;
 	}
 }
 

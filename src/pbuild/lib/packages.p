@@ -76,6 +76,7 @@ class Product extends Folder {
 	}
 
 	public boolean setVersion(string version) {
+//		printf("setVersion %s -> %s\n", toString(), version);
 		if (!context.Version.isValid(version))
 			return false;
 		_version = version;
@@ -155,9 +156,16 @@ public class ParasolProduct extends Product {
 			if (!versionAllowed)
 				buildFile.error(object, toString() + " shall not have a version");
 			else {
-				_version = a.toString();
-				if (!context.Version.isValidTemplate(_version))
-					buildFile.error(object, toString() + " version must be a valid version template");
+				boolean success;
+
+				(_version, success) = buildFile.expandMacros(a);
+				if (!success)
+					buildFile.error(object, toString() + " version must expand all macros: " + _version);
+				else if (_version.indexOf('D') >= 0) {
+					if (!context.Version.isValidTemplate(_version))
+						buildFile.error(object, toString() + " version must be a valid version template");
+				} else if (!context.Version.isValid(_version))
+					buildFile.error(object, toString() + " version must be a valid version string");
 			}
 		}
 	}

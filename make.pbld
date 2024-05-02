@@ -13,15 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-application(name: pbug, main: src/pbug/main.p) {
+import(filename: version.pbld)
+
+application(name: pbug, main: src/pbug/main.p, version: "${PARASOL_VERSION}") {
 	use(package: build:parasollanguage.org)
 }
 
-application(name: pbuild, main: src/pbuild/main.p) {
+application(name: pbuild, main: src/pbuild/main.p, version: "${PARASOL_VERSION}") {
 	//use(package: build:parasollanguage.org)
 }
 
-package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
+package(name: core:parasollanguage.org, version: "${PARASOL_VERSION}", preserveAnonymousUnits: true) {
 	file(name: *.p, src: runtime)
 	init(placement: first){
 		memory.p
@@ -34,7 +36,7 @@ package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
 	}
 }
 
-package(name: build:parasollanguage.org) {
+package(name: build:parasollanguage.org, version: "${BUILD_VERSION}") {
 	file(name: *.p, src: src/pbuild/lib)
 }
 
@@ -67,7 +69,7 @@ target(os: linux, cpu: x86-64) {
 				file(name: main.cc, src: src/C++)
 				file(name: *.h, src: src/C++)
 			}
-			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx)
+			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
 		}
 		include(name: runtime, type: package, src: core:parasollanguage.org)
 		folder(name: src) {
@@ -76,6 +78,9 @@ target(os: linux, cpu: x86-64) {
 				folder(name: lib) {
 					file(name: *.p, src: src/paradoc/lib)
 				}
+			}
+			folder(name: pbug) {
+				file(name: *.p, src: src/pbug)
 			}
 			folder(name: pbuild) {
 				file(name: *.p, src: src/pbuild)
@@ -148,7 +153,7 @@ target(os: windows, cpu: x86-64) {
 			file(name: pc.bat, src: bin)
 			file(name: runets.bat, src: bin)
 			file(name: unit.bat, src: bin)
-			pxi(name: x86-64-win.pxi, main: src/pc/main.p. target: x86-64-win)
+			pxi(name: x86-64-win.pxi, main: src/pc/main.p. target: x86-64-win, version: "${PARASOL_VERSION}")
 		}
 		include(type: package, name: core:parasollanguage.org)
 		folder(name: src) {

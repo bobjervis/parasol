@@ -135,9 +135,13 @@ public class Object extends Atom {
 		return _properties.get(name);
 	}
 	/**
-	 * put
-	 *
-	 * Put method defines the name to have the given value.
+	 * Retrieve the properties list to iterate over it.
+	 */
+	public ref<ref<Atom>[string]> properties() {
+		return &_properties;
+	}
+	/**
+	 * Put defines a name to have the given value.
 	 *
 	 * @param name The name of the property to assign.
 	 * If the name is not currently defined, the name is added as
@@ -146,7 +150,7 @@ public class Object extends Atom {
 	 * @param value The value to be assigned to the property.
 	 *
 	 * @return true If the property did not exist and has been added,
-	 * false if the property existed.
+	 * false if the property existed and has been replaced.
 	 * Any existing value is deleted.
 	 */
 	public boolean put(string name, ref<Atom> value) {
@@ -852,6 +856,10 @@ public class MessageLog {
 
 	public string filename() {
 		return _filename;
+	}
+
+	public ref<Scanner> scanner() {
+		return _scanner;
 	}
 
 	public int lineNumber(int offset) {

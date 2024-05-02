@@ -304,6 +304,21 @@ public string[], boolean expandWildCard(string pattern) {
  * For example, if you have a relative path in an HTML link, it is found relative to
  * the directory containing the HTML file that contains the link.
  *
+ * This is a complement to {@link makeCompactPath}. Suppose you have a situation such as an HTML page, A.html,
+ * where you have embedded relative paths to various linked pages, ../other/B.html and ../and_another/C.html.
+ * What you're interested in is obtaining the files referenced. This function, pathRelativeTo, given a reference and a path to the file 
+ * containing the reference and returns.
+ *
+ * In effect:
+ *
+ * {@code X = pathRelativeTo(Y, Z); }
+ *
+ * will involve the same file references as:
+ *
+ * {@code Y = makeCompactPath(X, Z)
+ *
+ * NOTE: This needs a clearer explanation.
+ *
  * @param filename The (possibly relative) path to a file.
  * @param baseFilename The path to a file.
  *

@@ -305,8 +305,13 @@ public class Coordinator extends CoordinatorVolatileData {
 		return success;
 	}
 
-	private boolean parseBuildFile(string buildFile, string buildDir, string outputDir) {
-		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this, outputDir);
+	public boolean parseBuildFile(string buildFile, string buildDir, string outputDir) {
+		if (buildDir == null) {
+			printf("parseBuildFile(%s, null, %s)\n", buildFile, outputDir);
+			return false;
+		}
+
+		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this, outputDir, null);
 
 		if (bf == null)
 			return false;
@@ -352,6 +357,48 @@ public class Coordinator extends CoordinatorVolatileData {
 		return true;
 	}
 
+	public boolean parseBuildFile(ref<BuildFile> importing, ref<script.Object> importDirective) {
+		a := importDirective.get("filename");
+		if (a == null)
+			importing.error(importDirective, "No filename attribute");
+		else {
+			importedFile := storage.pathRelativeTo(a.toString(), importing.path());
+
+			bf := BuildFile.parse(importedFile, null, errorMessage, _targetOS, _targetCPU, this, 
+												importing.buildRoot().path(), importing.macroSet());
+
+			if (bf == null)
+				return false;
+
+			absBuildDir := storage.absolutePath(storage.directory(importedFile));
+
+			importing.tests.append(bf.tests);
+			importing.products.append(bf.products);
+
+			bf.products.clear();
+			bf.tests.clear();
+	
+			delete bf;
+	
+			return true;
+		}
+		return false;
+/*
+		string name;
+		string value;
+		a := object.get("name");
+		if (a == null)
+			importing.error(object, "No name attribute");
+		else
+			name = a.toString()
+		a = object.get("value");
+		if (a == null)
+			importing.error(object, "No value attribute");
+		else
+			value = a.toString();
+*/
+	}
+
 	public void addTest(ref<Test> t) {
 		string key = t.toString();
 		if (!_uniqueTests.contains(key)) {
@@ -367,23 +414,6 @@ public class Coordinator extends CoordinatorVolatileData {
 
 	public void addAfterPassScript(string testDir, string script) {
 		_afterPassScript.printf("( cd %s\n %s\n )\n", testDir, script);
-	}
-
-	public boolean applyManifest(string manifestFile) {
-		ManifestFile mf(manifestFile);
-
-		if (!mf.parse(errorMessage, this))
-			return false;
-		return mf.apply(this);
-	}
-
-	public boolean setProductVersion(string productName, string version) {
-		for (i in _products) {
-			product := _products[i];
-			if (product.name() == productName)
-				return product.setVersion(version);
-		}
-		return false;
 	}
 
 	public int run() {
