@@ -166,6 +166,11 @@ public class ParasolProduct extends Product {
 						buildFile.error(object, toString() + " version must be a valid version template");
 				} else if (!context.Version.isValid(_version))
 					buildFile.error(object, toString() + " version must be a valid version string");
+				if (_version != null && _version.indexOf('D') >= 0) {
+					_version = expandTemplate(_version);
+				} else if (!buildFile.coordinator().officialBuild()) {
+					_version = expandTemplate(_version + ".D");
+				}
 			}
 		}
 	}
@@ -241,6 +246,8 @@ public class ParasolProduct extends Product {
 	}
 
 	public boolean shouldCompile() {
+		if (coordinator().officialBuild())
+			return true;
 		time.Instant accessed, modified, created;
 		boolean success;
 
@@ -515,7 +522,7 @@ public class Package extends ParasolProduct {
 																					_initFirst, _initLast)) 
 					return false;
 				metadataFile := storage.path(tmpPath(), context.PACKAGE_METADATA);
-				_package.setMetadata(expandTemplate(_version), _usedPackages);
+				_package.setMetadata(_version, _usedPackages);
 				if (!_package.writeMetadata(metadataFile))
 					return false;
 			}
@@ -1235,7 +1242,7 @@ string expandTemplate(string template) {
 		if (c == 'D') {
 			time.Formatter f("yyyyMMddHHmmss");
 			time.Date d(time.Instant.now());
-			return f.format(&d);
+			output.append(f.format(&d));
 		} else
 			output.append(c);
 	}

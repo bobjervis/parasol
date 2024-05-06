@@ -39,24 +39,81 @@ private monitor class CoordinatorVolatileData {
 	boolean _overallSuccess;
 }
 
+public class BuildOptions {
+	public ref<process.Option<string>> buildDirOption;
+	public ref<process.Option<string>> buildFileOption;
+	public ref<process.Option<int>> buildThreadsOption;
+	public ref<process.Option<string>> outputDirOption;
+	public ref<process.Option<string>> targetOSOption;
+	public ref<process.Option<string>> targetCPUOption;
+	public ref<process.Option<string>> suitesOption;
+	public ref<process.Option<boolean>> traceOption;
+	public ref<process.Option<boolean>> officialBuildOption;
+	public ref<process.Option<boolean>> symbolTableOption;
+	public ref<process.Option<boolean>> reportOutOfDateOption;
+	public ref<process.Option<boolean>> verboseOption;
+	public ref<process.Option<boolean>> logImportsOption;
+	public ref<process.Option<boolean>> disassemblyOption;
+	public ref<process.Option<string>> uiReadyOption;
+	public ref<process.Option<string>> installContextOption;
+
+	public void setOptionDefaults() {
+		if (buildDirOption == null)
+			buildDirOption = process.Command.defaultStringOption();
+		if (buildFileOption == null)
+			buildFileOption = process.Command.defaultStringOption();
+		if (buildThreadsOption == null)
+			buildThreadsOption = process.Command.defaultIntOption();
+		if (outputDirOption == null)
+			outputDirOption = process.Command.defaultStringOption();
+		if (targetOSOption == null)
+			targetOSOption = process.Command.defaultStringOption();
+		if (targetCPUOption == null)
+			targetCPUOption = process.Command.defaultStringOption();
+		if (suitesOption == null)
+			suitesOption = process.Command.defaultStringOption();
+		if (traceOption == null)
+			traceOption = process.Command.defaultBooleanOption();
+		if (officialBuildOption == null)
+			officialBuildOption = process.Command.defaultBooleanOption();
+		if (symbolTableOption == null)
+			symbolTableOption = process.Command.defaultBooleanOption();
+		if (reportOutOfDateOption == null)
+			reportOutOfDateOption = process.Command.defaultBooleanOption();
+		if (verboseOption == null)
+			verboseOption = process.Command.defaultBooleanOption();
+		if (logImportsOption == null)
+			logImportsOption = process.Command.defaultBooleanOption();
+		if (disassemblyOption == null)
+			disassemblyOption = process.Command.defaultBooleanOption();
+		if (uiReadyOption == null)
+			uiReadyOption = process.Command.defaultStringOption();
+		if (installContextOption == null)
+			installContextOption = process.Command.defaultStringOption();
+
+		if (!buildThreadsOption.set())
+			buildThreadsOption.value = thread.cpuCount();
+		if (!buildDirOption.set())
+			buildDirOption.value = ".";
+		if (!outputDirOption.set()) {
+			if (buildFileOption.set())
+				outputDirOption.value = storage.path(buildDirOption.value, "build");
+		}
+		if (!targetOSOption.set())
+			targetOSOption.value = thisOS();
+		if (!targetCPUOption.set())
+			targetCPUOption.value = thisCPU();
+		// Make sure the prefix test ends with a / - so that we don't accidentally match partial filenames.
+		if (uiReadyOption.set() && !uiReadyOption.value.endsWith("/"))
+			uiReadyOption.value.append('/');
+	}
+}
+
 public class Coordinator extends CoordinatorVolatileData {
-	private string _buildDir;
-	private string _buildFile;
-	private int _buildThreads;
-	private string _outputDir;
-	private string _targetOS;
-	private string _targetCPU;
-	private string _installContext;
+	private ref<BuildOptions> _buildOptions;
 	private ref<context.Context> _installTarget;
 	private Set<string> _suites;
 	private Set<string> _definedSuites;
-	private string _uiPrefix;
-	private boolean _generateSymbolTables;
-	private boolean _generateDisassembly;
-	private boolean _reportOutOfDate;
-	private boolean _verbose;
-	private boolean _trace;
-	private boolean _logImports;
 	private ref<thread.Thread>[] _threads;
 	private ref<Package>[string] _packageMap;		// maps package name to Package, all the packages discovered that will be built
 	private ref<context.PseudoContext> _pseudoContext;
@@ -70,63 +127,18 @@ public class Coordinator extends CoordinatorVolatileData {
 	private static ref<thread.ThreadPool<boolean>> _workers;
 	private Set<string> _uniqueTests;
 
-	public Coordinator(string buildDir, 
-					   string buildFile, 
-					   int buildThreads, 
-					   string outputDir, 
-					   string targetOS, 
-					   string targetCPU,
-					   string uiPrefix,
-					   string suites,
-					   string installContext,
-					   boolean generateSymbolTables,
-					   boolean generateDisassembly,
-					   boolean reportOutOfDate,
-					   boolean verbose,
-					   boolean trace,
-					   boolean logImports,
-					   string... components) {
+	public Coordinator(ref<BuildOptions> buildOptions, string... components) {
+		_buildOptions = buildOptions;
+
 		lock(_lock) {
 			if (_workers == null)
-				_workers = new thread.ThreadPool<boolean>(buildThreads);
+				_workers = new thread.ThreadPool<boolean>(buildThreads());
 		}
-		if (buildDir == null)
-			_buildDir = ".";
-		else
-			_buildDir = buildDir;
-		_buildFile = buildFile;
-		if (buildThreads == 0)
-			_buildThreads = thread.cpuCount();
-		else
-			_buildThreads = buildThreads;
-		if (outputDir == null && _buildFile != null)
-			_outputDir = storage.path(_buildDir, "build");
-		else
-			_outputDir = outputDir;
-		if (targetOS == null)
-			_targetOS = thisOS();
-		else
-			_targetOS = targetOS;
-		if (targetCPU == null)
-			_targetCPU = thisCPU();
-		else
-			_targetCPU = targetCPU;
-		_installContext = installContext;
-		_uiPrefix = uiPrefix;
-		if (suites != null) {
-			string[] suiteNames = suites.split(',');
+		if (_buildOptions.suitesOption.set()) {
+			string[] suiteNames = _buildOptions.suitesOption.value.split(',');
 			for (i in suiteNames)
 				_suites.add(suiteNames[i]);
 		}
-		// Make sure the prefix test ends with a / - so that we don't accidentally match partial filenames.
-		if (_uiPrefix != null && !_uiPrefix.endsWith("/"))
-			_uiPrefix.append('/');
-		_generateSymbolTables = generateSymbolTables;
-		_generateDisassembly = generateDisassembly;
-		_reportOutOfDate = reportOutOfDate;
-		_verbose = verbose;
-		_trace = trace;
-		_logImports = logImports;
 		_commandLineProducts = components;
 		_pseudoContext = new context.PseudoContext(context.getActiveContext());
 	}
@@ -136,37 +148,37 @@ public class Coordinator extends CoordinatorVolatileData {
 	}
 
 	public boolean validate() {
-		switch (_targetOS) {
+		switch (targetOS()) {
 		case "linux":
 		case "windows":
 			break;
 
 		default:
-			printf("Unknown target OS '%s'\n", _targetOS);
+			printf("Unknown target OS '%s'\n", targetOS());
 			return false;
 		}
-		switch (_targetCPU) {
+		switch (targetCPU()) {
 		case "x86-64":
 			break;
 
 		default:
-			printf("Unknown target CPU '%s'\n", _targetCPU);
+			printf("Unknown target CPU '%s'\n", targetCPU());
 			return false;
 		}
 
-		if (_installContext != null) {
-			printf("Install context: %s\n", _installContext);
-			_installTarget = context.get(_installContext);
+		if (installContext() != null) {
+			printf("Install context: %s\n", installContext());
+			_installTarget = context.get(installContext());
 			if (_installTarget == null) {
-				printf("    FAIL: Install context %s does not exist\n", _installContext);
+				printf("    FAIL: Install context %s does not exist\n", installContext());
 				return false;
 			}
 		}
 
-		if (_buildFile != null) {
-			if (!parseBuildFile(_buildFile, _buildDir, _outputDir))
+		if (buildFile() != null) {
+			if (!parseBuildFile(buildFile(), buildDir(), outputDir()))
 				return false;
-		} else if (!recurseThrough(_buildDir, _outputDir))
+		} else if (!recurseThrough(buildDir(), outputDir()))
 			return false;	
 
 		if (_suites.size() != _definedSuites.size()) {
@@ -240,7 +252,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			_products = selectedProducts;
 		}
 
-		if (_generateDisassembly) {
+		if (generateDisassembly()) {
 			boolean disassemblyPossible;
 			for (i in _products) {
 				p := _products[i];
@@ -256,7 +268,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 
 
-		if (_verbose) {
+		if (verbose()) {
 			for (i in _products)
 				_products[i].print(0);
 			for (i in _tests)
@@ -311,7 +323,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			return false;
 		}
 
-		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this, outputDir, null);
+		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, targetOS(), targetCPU(), this, outputDir, null);
 
 		if (bf == null)
 			return false;
@@ -328,7 +340,7 @@ public class Coordinator extends CoordinatorVolatileData {
 
 		for (i in bf.tests) {
 			ref<Suite> t = bf.tests[i];
-			if (!t.composeTestList(&bf.tests, buildFile, absBuildDir, _trace)) {
+			if (!t.composeTestList(&bf.tests, buildFile, absBuildDir, trace())) {
 				delete bf;
 				return false;
 			}
@@ -364,7 +376,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		else {
 			importedFile := storage.pathRelativeTo(a.toString(), importing.path());
 
-			bf := BuildFile.parse(importedFile, null, errorMessage, _targetOS, _targetCPU, this, 
+			bf := BuildFile.parse(importedFile, null, errorMessage, targetOS(), targetCPU(), this, 
 												importing.buildRoot().path(), importing.macroSet());
 
 			if (bf == null)
@@ -492,7 +504,7 @@ public class Coordinator extends CoordinatorVolatileData {
 				}
 			}
 			if (_installTarget != null) {
-				printf("    Installing to context %s:\n", _installContext);
+				printf("    Installing to context %s:\n", installContext());
 				for (i in _products) {
 					p := _products[i];
 					if (p == corePackage)
@@ -505,10 +517,10 @@ public class Coordinator extends CoordinatorVolatileData {
 					pkg := new context.Package(null, null, bldPkg.path());
 					if (_installTarget.definePackage(pkg))
 						printf("        Installed package %s version %s\n", pkg.name(), pkg.version(),
-												 _installContext);
+												 installContext());
 					else {
 						printf("        FAIL: Could not install package %s version %s\n", pkg.name(), pkg.version(),
-												 _installContext);
+												 installContext());
 						success = false;
 					}
 				}
@@ -565,10 +577,6 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 	}
 
-	public string outputDir() {
-		return _outputDir;
-	}
-
 	public ref<context.Context> activeContext() {
 		return _pseudoContext;
 	}
@@ -577,12 +585,40 @@ public class Coordinator extends CoordinatorVolatileData {
 		return _workers;
 	}
 
+	public int buildThreads() {
+		return _buildOptions.buildThreadsOption.value;
+	}
+
+	public string buildDir() {
+		return _buildOptions.buildDirOption.value;
+	}
+
+	public string buildFile() {
+		return _buildOptions.buildFileOption.value;
+	}
+
+	public string outputDir() {
+		return _buildOptions.outputDirOption.value;
+	}
+
+	public boolean generateDisassembly() {
+		return _buildOptions.disassemblyOption.value;
+	}
+
+	public boolean officialBuild() {
+		return _buildOptions.officialBuildOption.value;
+	}
+		
 	public string targetOS() {
-		return _targetOS;
+		return _buildOptions.targetOSOption.value;
 	}
 
 	public string targetCPU() {
-		return _targetCPU;
+		return _buildOptions.targetCPUOption.value;
+	}
+
+	public string installContext() {
+		return _buildOptions.installContextOption.value;
 	}
 
 	public boolean runSuite(string suiteName) {
@@ -590,31 +626,27 @@ public class Coordinator extends CoordinatorVolatileData {
 	}
 
 	public string uiPrefix() {
-		return _uiPrefix;
+		return _buildOptions.uiReadyOption.value;
 	}
 
 	public boolean reportOutOfDate() {
-		return _reportOutOfDate;
+		return _buildOptions.reportOutOfDateOption.value;
 	}
 
 	public boolean verbose() {
-		return _verbose;
+		return _buildOptions.verboseOption.value;
 	}
 
 	public boolean trace() {
-		return _trace;
+		return _buildOptions.traceOption.value;
 	}
 
 	public boolean logImports() {
-		return _logImports;
+		return _buildOptions.logImportsOption.value;
 	}
 
 	public boolean generateSymbolTables() {
-		return _generateSymbolTables;
-	}
-
-	public boolean generateDisassembly() {
-		return _generateDisassembly;
+		return _buildOptions.symbolTableOption.value;
 	}
 
 	public ref<Application> getApplication(string name) {

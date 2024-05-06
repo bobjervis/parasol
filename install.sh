@@ -33,7 +33,7 @@ sudo chmod +rx -R $INSTALL/runtime
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest
 
-$INSTALL/bin/pbuild -f $BIN/installer.pbld -o $BIN/inst_build
+$INSTALL/bin/pbuild -f $BIN/installer.pbld -o $BIN/inst_build --official
 sudo cp $BIN/inst_build/installer_parasollanguage.org/*.pxi $INSTALL/bin
 rm -rf $BIN/inst_build
 

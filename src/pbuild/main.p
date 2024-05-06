@@ -14,13 +14,12 @@
    limitations under the License.
  */
 import parasol:process;
-import parasol:pbuild.Coordinator;
-import parasol:pbuild.thisOS;
-import parasol:pbuild.thisCPU;
+import parasol:pbuild;
 import parasol:runtime;
-import parasol:thread;
 
 class PBuildCommand extends process.Command {
+	pbuild.BuildOptions buildOptions;
+
 	public PBuildCommand() {
 		finalArguments(0, int.MAX_VALUE, "[ products ... ]");
 		description("Parasol Build Utility.\n" +
@@ -50,66 +49,52 @@ class PBuildCommand extends process.Command {
 					"Parasol Compiler Version " + runtime.image.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
-		installContextOption = stringOption('i', "install",
+		buildOptions.installContextOption = stringOption('i', "install",
 					"Designates a Parasol context, into which the command-line arguments designating package " +
 					"products are to be installed" +
 					".");
-		buildDirOption = stringOption('d', "dir",
+		buildOptions.buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +
 					"Default: .");
-		buildFileOption = stringOption('f', "file",
+		buildOptions.buildFileOption = stringOption('f', "file",
 					"Designates the path for the build file. " +
 					"If this option is provided, only this one build script will be loaded and executed. " +
 					"Default: Apply the search algorithm described below.");
-		buildThreadsOption = integerOption('t', "threads",
+		buildOptions.buildThreadsOption = integerOption('t', "threads",
 					"Declares the number of threads to be used in the build. " +
 					"Default: number of cpus on machine.");
-		outputDirOption = stringOption('o', "out",
+		buildOptions.outputDirOption = stringOption('o', "out",
 					"Designates the output directory where all products will be stored. " +
 					"If no out directory is designated on the command-line, then a directory " +
 					"named 'build' will be used to store the outputs described in each build file " +
 					"included in the build.");
-		reportOutOfDateOption = booleanOption('r', "report",
+		buildOptions.reportOutOfDateOption = booleanOption('r', "report",
 					"Reports which file caused a given product to be rebuilt.");
-		verboseOption = booleanOption('v', null,
+		buildOptions.verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		traceOption = booleanOption(0, "trace", "Trace the execution of each test.");
-		logImportsOption = booleanOption(0, "logImports",
+		buildOptions.traceOption = booleanOption(0, "trace", "Trace the execution of each test.");
+		buildOptions.logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing.");
-		symbolTableOption = booleanOption(0, "syms",
+		buildOptions.officialBuildOption = booleanOption(0, "official", 
+					"Do not include a date/time extension on the build version and build all targets");
+		buildOptions.symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
-		disassemblyOption = booleanOption(0, "asm",
+		buildOptions.disassemblyOption = booleanOption(0, "asm",
 					"Display disassembly of generated code");
-		uiReadyOption = stringOption(0, "ui",
+		buildOptions.uiReadyOption = stringOption(0, "ui",
 					"Display error messages with mark up suitable for the UI. The argument string is the filename prefix that identifies files being compiled (versus reference libraries not in the editor)");
-		targetOSOption = stringOption(0, "os",
+		buildOptions.targetOSOption = stringOption(0, "os",
 					"Selects the target operating system for this execution. " +
-					"Default: " + thisOS());
-		targetCPUOption = stringOption(0, "cpu",
+					"Default: " + pbuild.thisOS());
+		buildOptions.targetCPUOption = stringOption(0, "cpu",
 					"Selects the target operating system for this execution. " +
-					"Default: " + thisCPU());
-		suitesOption = stringOption(0, "tests",
+					"Default: " + pbuild.thisCPU());
+		buildOptions.suitesOption = stringOption(0, "tests",
 					"Run the indicated test suite(s) after successful completion of the build.");
 		helpOption('?', "help",
 					"Displays this help.");
 		versionOption("version", "Display the version of the pbuild app.");
 	}
-
-	ref<process.Option<string>> installContextOption;
-	ref<process.Option<string>> buildDirOption;
-	ref<process.Option<string>> buildFileOption;
-	ref<process.Option<int>> buildThreadsOption;
-	ref<process.Option<string>> outputDirOption;
-	ref<process.Option<string>> targetOSOption;
-	ref<process.Option<string>> targetCPUOption;
-	ref<process.Option<string>> suitesOption;
-	ref<process.Option<boolean>> traceOption;
-	ref<process.Option<boolean>> symbolTableOption;
-	ref<process.Option<boolean>> reportOutOfDateOption;
-	ref<process.Option<boolean>> verboseOption;
-	ref<process.Option<boolean>> logImportsOption;
-	ref<process.Option<boolean>> disassemblyOption;
-	ref<process.Option<string>> uiReadyOption;
 }
 
 PBuildCommand pbuildCommand;
@@ -117,24 +102,9 @@ PBuildCommand pbuildCommand;
 public int main(string[] args) {
 	if (!pbuildCommand.parse(args))
 		pbuildCommand.help();
-	if (!pbuildCommand.buildThreadsOption.set())
-		pbuildCommand.buildThreadsOption.value = thread.cpuCount();
-	Coordinator coordinator(pbuildCommand.buildDirOption.value,
-							pbuildCommand.buildFileOption.value,
-							pbuildCommand.buildThreadsOption.value,
-							pbuildCommand.outputDirOption.value,
-							pbuildCommand.targetOSOption.value,
-							pbuildCommand.targetCPUOption.value,
-							pbuildCommand.uiReadyOption.value,
-							pbuildCommand.suitesOption.value,
-							pbuildCommand.installContextOption.value,
-							pbuildCommand.symbolTableOption.set(),
-							pbuildCommand.disassemblyOption.set(),
-							pbuildCommand.reportOutOfDateOption.set(),
-							pbuildCommand.verboseOption.set(),
-							pbuildCommand.traceOption.set(),
-							pbuildCommand.logImportsOption.set(),
-							pbuildCommand.finalArguments());
+	pbuildCommand.buildOptions.setOptionDefaults();
+	pbuild.Coordinator coordinator(&pbuildCommand.buildOptions,
+								   pbuildCommand.finalArguments());
 	if (!coordinator.validate()) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();

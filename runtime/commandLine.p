@@ -157,6 +157,10 @@ public class Command {
 		}
 	}
 	
+	public static ref<Option<int>> defaultIntOption() {
+		return new Option<int>(OptionClass.INTEGER, '', null, null);
+	}
+
 	public ref<Option<string>> stringOption(string longOption, string helpText) {
 		return stringOption(0, longOption, helpText);
 	}
@@ -171,6 +175,10 @@ public class Command {
 		}
 	}
 
+	public static ref<Option<string>> defaultStringOption() {
+		return new Option<string>(OptionClass.STRING, '', null, null);
+	}
+
 	public ref<Option<boolean>> booleanOption(string longOption, string helpText) {
 		return booleanOption(0, longOption, helpText);
 	}
@@ -183,6 +191,10 @@ public class Command {
 			delete arg;
 			return null;
 		}
+	}
+
+	public static ref<Option<boolean>> defaultBooleanOption() {
+		return new Option<boolean>(OptionClass.BOOLEAN, '', null, null);
 	}
 
 	public boolean versionOption(string longOption, string helpText) {
@@ -506,7 +518,7 @@ class BaseOption {
 		return _longOption; 
 	}
 
-	boolean setValue(string value) {
+	public boolean setValue(string value) {
 		switch (_optionClass) {
 		case	STRING:
 			if (value == null)

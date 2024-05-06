@@ -14,10 +14,7 @@
    limitations under the License.
  */
 import parasol:process;
-import parasol:pbuild.Application;
-import parasol:pbuild.Coordinator;
-import parasol:pbuild.thisOS;
-import parasol:pbuild.thisCPU;
+import parasol:pbuild;
 import parasol:runtime;
 import parasol:storage;
 
@@ -96,21 +93,18 @@ public int main(string[] args) {
 	arguments := pbugCommand.finalArguments();
 	string exePath;
 	if (pbugCommand.applicationOption.set()) {
-		Coordinator coordinator(null,		// build dir
-								pbugCommand.buildFileOption.value,
-								1,			// threads
-								null,		// output dir
-								null,		// target os
-								null,		// target cpu
-								null,		// ui prefix
-								null,		// test suites
-								null,		// install context
-								false,		// symbol table
-								false,		// disassembly
-								false,		// report out of date
-								pbugCommand.verboseOption.set(),
-								false,		// trace
-								false);		// log imports
+		// This is all kind of gross. 
+		pbuild.BuildOptions buildOptions;
+		buildOptions.buildFileOption = process.Command.defaultStringOption();
+		buildOptions.buildFileOption.setValue(pbugCommand.buildFileOption.value);
+		buildOptions.verboseOption = process.Command.defaultBooleanOption();
+		if (pbugCommand.verboseOption.set())
+			buildOptions.verboseOption.setValue("true");
+		buildOptions.buildThreadsOption = process.Command.defaultIntOption();
+		buildOptions.buildThreadsOption.setValue("1");
+		buildOptions.setOptionDefaults();
+
+		pbuild.Coordinator coordinator(&buildOptions);
 		if (!coordinator.validate()) {
 			printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 			pbugCommand.help();
@@ -134,7 +128,7 @@ public int main(string[] args) {
 	}
 	if (storage.isDirectory(exePath)) {
 		printf("Launching application directory '%s'\n", exePath);
-		if (!Application.verify(exePath)) {
+		if (!pbuild.Application.verify(exePath)) {
 			printf("Application directory %s cannot be verified, cannot run it.\n", exePath);
 			return 1;
 		}
