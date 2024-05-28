@@ -92,6 +92,7 @@ class Names {
 			ref<compiler.Type> t = typeFor(sym);
 			if (t.family() != runtime.TypeFamily.TEMPLATE)
 				return null;
+			scope = scope.enclosing();
 		}
 		string name = sym.name();
 		string classFile = storage.path(dirName, name, "html");

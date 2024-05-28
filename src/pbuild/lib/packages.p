@@ -343,7 +343,7 @@ public class ParasolProduct extends Product {
 		string filename = file.filename();
 		if (filename.startsWith(coordinator().uiPrefix())) {
 			filename = filename.substr(coordinator().uiPrefix().length() - 1);
-			if (node.location().isInFile()) {
+			if (compiler.isInFile(node.location())) {
 				ref<compiler.Scanner> scanner = file.scanner();
 				// The old scanner (which is already closed, so it cannot be used to re-scan tokens) has line number info.
 				int lineNumber = file.lineNumber(node.location());
@@ -352,12 +352,12 @@ public class ParasolProduct extends Product {
 				scanner = file.newScanner();
 				scanner.seek(node.location());
 				scanner.next();
-				runtime.SourceOffset endLoc = scanner.cursor();
+				endLoc := scanner.cursor();
 				delete scanner;
 				printf("={<%c%d %d %d %d %s>}=: %s\n", commentClass, lineNumber + 1, 
-								node.location().offset,
-								node.location().offset,
-								endLoc.offset,
+								node.location(),
+								node.location(),
+								endLoc,
 								filename, comment.message());
 			} else
 				printf("%s : %s\n", filename, comment.message());

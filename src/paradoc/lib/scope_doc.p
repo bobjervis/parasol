@@ -311,9 +311,10 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<compiler.Symbol> s
 	output.printf("<td class=\"linkcol\">");
 	if (sym.definition() != scope.className() && t.family() != runtime.TypeFamily.TEMPLATE)
 		output.printf("%s = ", name);
-	if (sym.type() == null)
+	if (sym.type() == null) {
 		output.printf("&lt;null&gt;</td>\n");
-	else		
+		sym.print(0, false);
+	} else
 		output.printf("%s</td>\n", typeString(sym.type(), baseName));
 
 	output.write("<td class=\"descriptioncol\">");
@@ -669,7 +670,7 @@ string typeString(ref<compiler.Type> type, string baseName) {
 		return s;
 
 	case	CLASS_DEFERRED:
-		return "class";
+		return type.signature();
 
 	case	FLAGS:
 		classFile = classFiles[long(type.scope())];

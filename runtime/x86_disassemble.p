@@ -56,8 +56,6 @@ public class Disassembler {
 	private pointer<ref<Symbol>> _dataMap;
 	private ref<ref<Scope>[]> _functionMap;
 	private int _dataMapLength;
-	private pointer<runtime.SourceLocation> _sourceLocations;
-	private int _sourceLocationsCount;
 	private ref<ref<ClassScope>[]> _vtables;
 	private ref<OrdinalMap> _ordinalMap;
 	
@@ -91,11 +89,6 @@ public class Disassembler {
 	void setOrdinalMap(ref<OrdinalMap> om) {
 		_ordinalMap = om;
 	}
-
-	void setSourceLocations(pointer<runtime.SourceLocation> sourceLocations, int sourceLocationsCount) {
-		_sourceLocations = sourceLocations;
-		_sourceLocationsCount = sourceLocationsCount;
-	}
 	
 	void setVtablesClasses(ref<ref<ClassScope>[]> vtables) {
 		if (_pxiHeader.vtableData > 0)
@@ -110,7 +103,7 @@ public class Disassembler {
 		_rex = 0;
 		_operandSize = false;
 		_sourceIndex = 0;
-		currentAddress();
+		currentAddress(&image);
 		for (;;) {
 			byte next = _physical[_offset];
 			_offset++;
@@ -501,7 +494,7 @@ public class Disassembler {
 				return done;
 			}
 			if (done) {
-				currentAddress();
+				currentAddress(&image);
 				_rex = 0;
 				_operandSize = false;
 				_repne = false;
@@ -785,22 +778,17 @@ public class Disassembler {
 		}
 	}
 	
-	void currentAddress() {
-		long loc = _logical + _offset;
-		boolean printedSource;
-		while (_sourceIndex < _sourceLocationsCount) {
-			if (_sourceLocations[_sourceIndex].offset <= loc) {
-				ref<runtime.SourceFile> file = _sourceLocations[_sourceIndex].file;
-				if (!printedSource)
-					printf("\n");
-				printf("  %s %d\n", file.filename(), file.lineNumber(_sourceLocations[_sourceIndex].location) + 1);
-				if (!printedSource)
-					printf("\n");
-				printedSource = true;
-				_sourceIndex++;
-			} else
-				break;
+	void currentAddress(ref<runtime.Image> image) {
+		string filename;
+		int lineNumber;
+		long probe = long(_physical) + _offset;
+
+		if (image.atSourceLocation(probe)) {
+			(filename, lineNumber) = image.getSourceLocation(probe);
+
+			printf("\n  %s %d\n\n", filename, lineNumber);
 		}
+		long loc = _logical + _offset;
 		printf("%c%8.8x ", loc == _ip ? '*' : ' ', loc);
 	}
 

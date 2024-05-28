@@ -433,9 +433,13 @@ public class Coordinator extends CoordinatorVolatileData {
 			_overallSuccess = true;
 		}
 		boolean success = true;
-		if (_commandLineProducts.length() == 0)
-			printf("Building all %d products.\n", _products.length());
-		else if (_commandLineProducts.length() == 1)
+		if (_commandLineProducts.length() == 0) {
+			printableProducts := 0;
+			for (i in _products)
+				if (_products[i].showOutcome())
+					printableProducts++;
+			printf("Building all %d products.\n", printableProducts);
+		} else if (_commandLineProducts.length() == 1)
 			printf("Building %s.\n", _commandLineProducts[0]);
 		else
 			printf("Building %d selected products.\n", _commandLineProducts.length());

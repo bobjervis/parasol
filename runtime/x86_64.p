@@ -693,8 +693,7 @@ public class X86_64 extends X86_64AssignTemps {
 			generateStaticBlock(scope.unit(), compileContext);
 			node = ref<Block>(scope.definition());
 			ref<Symbol> main = scope.lookup("main", compileContext);
-			runtime.SourceOffset loc;
-			loc.offset = int(storage.size(scope.unit().filename()));
+			loc := int(storage.size(scope.unit().filename()));
 			emitSourceLocation(scope.unit(), loc);
 			if (main != null &&
 				main.class == Overload) {
@@ -867,7 +866,7 @@ public class X86_64 extends X86_64AssignTemps {
 			compileContext.buildScopes();
 			parameterScope.type.assignRegisterArguments(compileContext);
 			ref<SyntaxTree> tree = compileContext.tree();
-			runtime.SourceOffset loc = enclosing.definition().location();
+			compiler.SourceOffset loc = enclosing.definition().location();
 			ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
 			ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope, block, StorageClass.AUTO);
 			block.scope = outerBlock;
@@ -948,7 +947,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			compileContext.buildScopes();
 			ref<SyntaxTree> tree = compileContext.tree();
-			runtime.SourceOffset loc = ifaceScope.definition().location();
+			compiler.SourceOffset loc = ifaceScope.definition().location();
 			ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
 			ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope, block, StorageClass.AUTO);
 			block.scope = outerBlock;
@@ -1036,7 +1035,7 @@ public class X86_64 extends X86_64AssignTemps {
 				generateReturn(parameterScope, compileContext);
 				break;
 			}
-			runtime.SourceOffset loc = interfaceType.definition().location();
+			compiler.SourceOffset loc = interfaceType.definition().location();
 			ref<SyntaxTree> tree = compileContext.tree();
 			ref<FunctionType>(stub.type()).assignRegisterArguments(compileContext);
 /*
@@ -1192,7 +1191,7 @@ public class X86_64 extends X86_64AssignTemps {
 		return null;
 	}
 
-	private void marshal(ref<Node> value, ref<Variable> output, ref<Block> block, ref<SyntaxTree> tree, runtime.SourceOffset loc, ref<CompileContext> compileContext) {
+	private void marshal(ref<Node> value, ref<Variable> output, ref<Block> block, ref<SyntaxTree> tree, compiler.SourceOffset loc, ref<CompileContext> compileContext) {
 		ref<Type> t = value.type;
 		switch (t.family()) {
 		case SHAPE:
@@ -1319,7 +1318,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
  
 	private void unmarshal(ref<Variable> v, long offset, ref<Type> t, ref<Node> serialized, ref<Block> block, 
-							ref<SyntaxTree> tree, runtime.SourceOffset loc, ref<CompileContext> compileContext) {
+							ref<SyntaxTree> tree, compiler.SourceOffset loc, ref<CompileContext> compileContext) {
 		switch (t.family()) {
 		case SHAPE:
 			ref<Type> elementType = t.elementType();

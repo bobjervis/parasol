@@ -19,13 +19,29 @@ import parasol:runtime;
 import parasol:storage;
 
 import parasollanguage.org:debug;
+import parasollanguage.org:debug.manager;
+import parasollanguage.org:debug.controller;
 import parasollanguage.org:cli;
+/**
+	The pbug command is part of a larger debugger architecture.
 
+	The Parasol debugging environment involves several inter-locking components:
+<ul>
+	<li>A UI in the form of an application or browser page capable of showing source code. 
+		While this UI could be a full-blown IDE, that is not necessary.
+	<li>The pbug --monitor command. In principle, each process being debugged has an associated pbug process instance
+		monitoring it's activity.
+	<li>The pbug --control command. One instance of this constitutes a single 'debug session' that may be controlling
+		multiple, distributed processes. 
+		It communicates with the UI using a web socket.
+</ul>
+ */
 class PBugCommand extends process.Command {
 	public PBugCommand() {
 		finalArguments(0, int.MAX_VALUE, "[ directory | mainfile ] [ arguments ... ]");
 		description("pbug - Parasol Debugging Utility.\n" +
 					"This program is a debug monitor that runs or attaches to a running process. " +
+					"If debugging multiple-processes, there will be one controller for each process so managed." +
 					"\n" +
 					"If either the -a or --application options are included, the process to be debugged " +
 					"is found by searching the build scripts for a product by that name. " +
@@ -56,29 +72,14 @@ class PBugCommand extends process.Command {
 					"Parasol Compiler Version " + runtime.image.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
-		processOption = integerOption('p', "process", "The id of a running process that is not already " +
-					"under the control of a debugger.");
-		applicationOption = stringOption('a', "application", "Names an application product described in the " +
-					"build scripts to be found (using the same rules as pbuild uses to find them).");
-		buildFileOption = stringOption('f', "file",
-					"Designates the path for the build file. " +
-					"If no -a or ---application option is included as well, this option has no effect. " +
-					"If this option is provided, only this one build script will be loaded and searched. " +
-					"Default: Apply the search algorithm described below.");
-		verboseOption = booleanOption('v', null,
-					"Enables verbose output.");
+		options = new debug.PBugOptions(this);
 		helpOption('?', "help",
 					"Displays this help.");
-		parasolLocationOption = stringOption(0, "location", "The location of the Parasol runtime to use. " +
-					"This is useful when debugging a script rather than a compiled application.");
 		versionOption("version", "Display the version of the pbug app.");
 	}
 
-	ref<process.Option<string>> applicationOption;
-	ref<process.Option<string>> buildFileOption;
-	ref<process.Option<string>> parasolLocationOption;
-	ref<process.Option<int>> processOption;
-	ref<process.Option<boolean>> verboseOption;
+	ref<debug.PBugOptions> options;
+
 }
 
 PBugCommand pbugCommand;
@@ -86,19 +87,19 @@ PBugCommand pbugCommand;
 public int main(string[] args) {
 	if (!pbugCommand.parse(args))
 		pbugCommand.help();
-	if (pbugCommand.processOption.set()) {
+	if (pbugCommand.options.processOption.set()) {
 		printf("Attaching to a running process is not yet supported.\n");
 		return 1;
 	}
 	arguments := pbugCommand.finalArguments();
 	string exePath;
-	if (pbugCommand.applicationOption.set()) {
+	if (pbugCommand.options.applicationOption.set()) {
 		// This is all kind of gross. 
 		pbuild.BuildOptions buildOptions;
 		buildOptions.buildFileOption = process.Command.defaultStringOption();
-		buildOptions.buildFileOption.setValue(pbugCommand.buildFileOption.value);
+		buildOptions.buildFileOption.setValue(pbugCommand.options.buildFileOption.value);
 		buildOptions.verboseOption = process.Command.defaultBooleanOption();
-		if (pbugCommand.verboseOption.set())
+		if (pbugCommand.options.verboseOption.set())
 			buildOptions.verboseOption.setValue("true");
 		buildOptions.buildThreadsOption = process.Command.defaultIntOption();
 		buildOptions.buildThreadsOption.setValue("1");
@@ -109,13 +110,13 @@ public int main(string[] args) {
 			printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 			pbugCommand.help();
 		}
-		a := coordinator.getApplication(pbugCommand.applicationOption.value);
+		a := coordinator.getApplication(pbugCommand.options.applicationOption.value);
 		if (a == null) {
-			printf("Application %s not found.\n", pbugCommand.applicationOption.value);
+			printf("Application %s not found.\n", pbugCommand.options.applicationOption.value);
 			return 1;
 		}
 		if (!a.verify()) {
-			printf("Application %s cannot be verified, cannot run it.\n", pbugCommand.applicationOption.value);
+			printf("Application %s cannot be verified, cannot run it.\n", pbugCommand.options.applicationOption.value);
 			return 1;
 		}
 		exePath = a.targetPath();
@@ -125,20 +126,36 @@ public int main(string[] args) {
 	} else {
 		exePath = arguments[0];
 		arguments.remove(0);
+		if (!storage.exists(exePath)) {
+			printf("Executable path '%s' does not exist\n", exePath);
+			return 1;
+		}
 	}
+
+	if (pbugCommand.options.controlOption.set()) {
+		return controller.run(pbugCommand.options, exePath, arguments);
+	}
+
+	if (pbugCommand.options.managerOption.set()) {
+		return manager.run(pbugCommand.options, exePath, arguments);
+	}
+
+	return cli.run(pbugCommand.options, exePath, arguments);
+/*
 	if (storage.isDirectory(exePath)) {
 		printf("Launching application directory '%s'\n", exePath);
 		if (!pbuild.Application.verify(exePath)) {
 			printf("Application directory %s cannot be verified, cannot run it.\n", exePath);
 			return 1;
 		}
-		debug.spawnApplication(pbugCommand.applicationOption.value, exePath, arguments);
+		debug.spawnApplication(pbugCommand.options.applicationOption.value, exePath, arguments);
 	} else if (storage.exists(exePath))
-		debug.spawnParasolScript(pbugCommand.parasolLocationOption.value, exePath, arguments);
+		debug.spawnParasolScript(pbugCommand.options.parasolLocationOption.value, exePath, arguments);
 	else {
 		printf("Not a valid script: %s\n", exePath);
 		return 1;
 	}
 	cli.consoleUI();
 	return 0;
+ */
 }

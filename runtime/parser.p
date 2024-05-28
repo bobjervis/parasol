@@ -45,7 +45,7 @@ public class Parser {
 	public ref<Node> parseStatement() {
 		Token t;
 		ref<Node> annotations = null;
-		runtime.SourceOffset location;
+		SourceOffset location;
 
 		t = _scanner.next();
 		if (t == Token.ANNOTATION) {
@@ -69,7 +69,7 @@ public class Parser {
 			return left;
 		for (;;) {
 			Token t = _scanner.next();
-			runtime.SourceOffset loc = _scanner.location();
+			SourceOffset loc = _scanner.location();
 			Operator op = binaryOperators.binaryOperator(t);
 
 			// If it isn't a binary operator, just go with the term.
@@ -140,7 +140,7 @@ public class Parser {
 
 	private ref<Node> parseBareStatement() {
 		Token t;
-		runtime.SourceOffset location;
+		SourceOffset location;
 		ref<Node> truePart;
 		ref<Node> falsePart;
 		ref<Node> x;
@@ -370,7 +370,7 @@ public class Parser {
 			for (;;) {
 				t = _scanner.next();
 				if (t == Token.CATCH) {
-					runtime.SourceOffset loc = _scanner.location();
+					SourceOffset loc = _scanner.location();
 					t = _scanner.next();
 					if (t != Token.LEFT_PARENTHESIS) {
 						_scanner.pushBack(t);
@@ -481,7 +481,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseLockStatement() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		ref<Node> lockReference;
 		if (t == Token.LEFT_PARENTHESIS) {
@@ -508,7 +508,7 @@ public class Parser {
 	}
 	
 	private ref<Node> parseImportStatement() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
@@ -544,7 +544,7 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		ref<Identifier> lastName = null;
 		ref<Node> ns = parseDottedName(null, ref<ref<Identifier>>(forImport ? &lastName : null));
 		if (ns.op() == Operator.SYNTAX_ERROR)
@@ -576,7 +576,7 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		runtime.SourceOffset lastIdentifier = _scanner.location();
+		SourceOffset lastIdentifier = _scanner.location();
 		string text;
 		substring spelling = _scanner.value();
 		for (;;) {
@@ -603,7 +603,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseVisibleDeclaration(Operator visibility) {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		ref<Node> n;
 		ref<Node> x;
@@ -653,7 +653,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseAbstractDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		ref<Node> returnType = parseExpression(0);
 		if (returnType.op() == Operator.SYNTAX_ERROR)
 			return returnType;
@@ -663,7 +663,7 @@ public class Parser {
 		ref<Doclet> doclet = _scanner.extractDoclet();
 		ref<Identifier> id = ref<Identifier>(name);
 		Token t = _scanner.next();
-		runtime.SourceOffset loc = _scanner.location();
+		SourceOffset loc = _scanner.location();
 		if (t != Token.LEFT_PARENTHESIS) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
@@ -701,7 +701,7 @@ public class Parser {
 				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_ABSTRACT)));
 			else
 				_scanner.pushBack(t);
-			runtime.SourceOffset location = _scanner.location();
+			SourceOffset location = _scanner.location();
 			ref<Node> returnType = parseExpression(0);
 			if (returnType.op() == Operator.SYNTAX_ERROR) {
 				block.statement(_tree.newNodeList(returnType));
@@ -716,7 +716,7 @@ public class Parser {
 			ref<Identifier> id = ref<Identifier>(name);
 			_tree.newDoclet(id, doclet);
 			t = _scanner.next();
-			runtime.SourceOffset loc = _scanner.location();
+			SourceOffset loc = _scanner.location();
 			if (t != Token.LEFT_PARENTHESIS) {
 				_scanner.pushBack(t);
 				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
@@ -740,7 +740,7 @@ public class Parser {
 	}
 	
 	private ref<Node> parseStaticDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		ref<Node> x = parseExpression(0);
 		if (x.op() == Operator.SYNTAX_ERROR)
 			return x;
@@ -751,7 +751,7 @@ public class Parser {
 	}
 
 	ref<Node> parseFinalDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		ref<Node> n;
 		if (t == Token.CLASS)
@@ -763,7 +763,7 @@ public class Parser {
 		else if (t == Token.ENUM)
 			n = parseEnumDeclaration();
 		else {
-			runtime.SourceOffset loc = _scanner.location();
+			SourceOffset loc = _scanner.location();
 			_scanner.pushBack(t);
 			ref<Node> x = parseExpression(0);
 			if (x.op() == Operator.SYNTAX_ERROR)
@@ -808,7 +808,7 @@ public class Parser {
 		return func;
 	}
 
-	private ref<Node> parseDeclarators(ref<Node> type, runtime.SourceOffset location) {
+	private ref<Node> parseDeclarators(ref<Node> type, SourceOffset location) {
 		ref<Doclet> doclet = _scanner.extractDoclet();
 		if (enclosingClassName() != null) {
 			switch (type.op()) {
@@ -842,7 +842,7 @@ public class Parser {
 			ref<FunctionDeclaration> func;
 			ref<Identifier> id = ref<Identifier>(x);
 			t = _scanner.next();
-			runtime.SourceOffset loc = _scanner.location();
+			SourceOffset loc = _scanner.location();
 			ref<NodeList> parameters;
 			_tree.newDoclet(id, doclet);
 			switch (t) {
@@ -964,7 +964,7 @@ public class Parser {
 						return right;
 					t = _scanner.next();
 					if (t == Token.EQUALS) {
-						runtime.SourceOffset locEq = _scanner.location();
+						SourceOffset locEq = _scanner.location();
 						initializer = parseExpression(1);
 						if (initializer.op() == Operator.SYNTAX_ERROR)
 							return initializer;
@@ -998,7 +998,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseClassOrInterfaceDeclaration(ClassContext context) {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
@@ -1010,7 +1010,7 @@ public class Parser {
 		// Look ahead to get the correct location for the CLASS node.
 		t = _scanner.next();
 		if (t == Token.EQUALS) {
-			runtime.SourceOffset locEq = _scanner.location();
+			SourceOffset locEq = _scanner.location();
 			ref<Node> initializer = parseExpression(1);
 			if (initializer.op() == Operator.SYNTAX_ERROR)
 				return initializer;
@@ -1035,7 +1035,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseMonitorDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 
 		if (t != Token.CLASS) {
@@ -1061,7 +1061,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseFlagsDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
@@ -1071,7 +1071,7 @@ public class Parser {
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		_tree.newDoclet(identifier, doclet);
 		t = _scanner.next();
-		runtime.SourceOffset blockLoc = _scanner.location();
+		SourceOffset blockLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
@@ -1092,7 +1092,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseEnumDeclaration() {
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		Token t = _scanner.next();
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
@@ -1102,7 +1102,7 @@ public class Parser {
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		_tree.newDoclet(identifier, doclet);
 		t = _scanner.next();
-		runtime.SourceOffset enumLoc = _scanner.location();
+		SourceOffset enumLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
@@ -1128,7 +1128,7 @@ public class Parser {
 
 	private ref<Node> parseEnumInstanceList() {
 		ref<Node> e = null;
-		runtime.SourceOffset commaLocation;
+		SourceOffset commaLocation;
 		Token t;
 		for (;;) {
 			t = _scanner.next();
@@ -1137,7 +1137,7 @@ public class Parser {
 				ref<Node> x = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 				_tree.newDoclet(x, doclet);
 				t = _scanner.next();
-				runtime.SourceOffset location = _scanner.location();
+				SourceOffset location = _scanner.location();
 				if (t == Token.LEFT_PARENTHESIS) {
 					ref<NodeList> parameters;
 					if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
@@ -1166,7 +1166,7 @@ public class Parser {
 	
 	private ref<Node> parseIdentifierList() {
 		ref<Node> e = null;
-		runtime.SourceOffset commaLocation;
+		SourceOffset commaLocation;
 		Token t;
 		for (;;) {
 			t = _scanner.next();
@@ -1194,7 +1194,7 @@ public class Parser {
 		return e;
 	}
 	
-	private ref<Node> parseGeneralizedFor(ref<Node> initializer, runtime.SourceOffset location) {
+	private ref<Node> parseGeneralizedFor(ref<Node> initializer, SourceOffset location) {
 		ref<Node> test;
 		ref<Node> increment;
 		ref<Node> body;
@@ -1239,14 +1239,14 @@ public class Parser {
 		return _tree.newFor(op, initializer, test, increment, body, location);
 	}
 
-	private ref<Node> parseScopedFor(ref<Node> type, runtime.SourceOffset location) {
+	private ref<Node> parseScopedFor(ref<Node> type, SourceOffset location) {
 		ref<Identifier> id = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		Token t = _scanner.next();
 		if (t != Token.EQUALS) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		runtime.SourceOffset loc = _scanner.location();
+		SourceOffset loc = _scanner.location();
 		ref<Node> initializer = parseExpression(0);
 		if (initializer.op() == Operator.SYNTAX_ERROR)
 			return initializer;
@@ -1260,7 +1260,7 @@ public class Parser {
 		return parseGeneralizedFor(x, location);
 	}
 
-	private ref<Node> parseIteratorFor(ref<Node> iteratorVar, runtime.SourceOffset location) {
+	private ref<Node> parseIteratorFor(ref<Node> iteratorVar, SourceOffset location) {
 		if (iteratorVar.op() != Operator.IDENTIFIER)
 			return resync(MessageId.SYNTAX_ERROR);
 		ref<Loop> loop = _tree.newLoop(location);
@@ -1285,7 +1285,7 @@ public class Parser {
 		ref<FunctionDeclaration> func;
 
 		Token t = _scanner.next();
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		switch (t) {
 		case	NEW:
 			t = _scanner.next();
@@ -1565,7 +1565,7 @@ public class Parser {
 
 	private ref<Node> parseDotOperand(ref<Node> x) {
 		Token t = _scanner.next();
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		switch (t) {
 		case	BYTES:
 			return _tree.newUnary(Operator.BYTES, x, location);
@@ -1591,7 +1591,7 @@ public class Parser {
 
 	private ref<Node> parseAggregateInitializer(Token startingToken) {
 		Token endingToken;
-		runtime.SourceOffset location = _scanner.location();
+		SourceOffset location = _scanner.location();
 		
 		if (startingToken == Token.LEFT_SQUARE)
 			endingToken = Token.RIGHT_SQUARE;
@@ -1618,7 +1618,7 @@ public class Parser {
 			if (t == endingToken)
 				break;
 			else if (t == Token.COLON) {
-				runtime.SourceOffset labLoc = _scanner.location();
+				SourceOffset labLoc = _scanner.location();
 				ref<Node> y = parseExpression(1);
 				x = _tree.newBinary(Operator.LABEL, x, y, labLoc);
 				int last = leftHandle.length() - 1;
@@ -1658,12 +1658,12 @@ public class Parser {
 					return annotations;
 				t = _scanner.next();
 			}
-			runtime.SourceOffset aLoc = _scanner.location();
+			SourceOffset aLoc = _scanner.location();
 			ref<Node> name;
 			ref<Node> type;
 			switch (t) {
 			case	CLASS: {
-				runtime.SourceOffset loc = _scanner.location();
+				SourceOffset loc = _scanner.location();
 				t = _scanner.next();
 				if (t != Token.IDENTIFIER) {
 					_scanner.pushBack(t);
@@ -1679,7 +1679,7 @@ public class Parser {
 			}	break;
 			
 			case	ENUM: {
-				runtime.SourceOffset loc = _scanner.location();
+				SourceOffset loc = _scanner.location();
 				t = _scanner.next();
 				if (t != Token.IDENTIFIER) {
 					_scanner.pushBack(t);
@@ -1702,7 +1702,7 @@ public class Parser {
 				t = _scanner.next();
 				if (t == Token.ANNOTATION ||
 					t == Token.IDENTIFIER) {
-					runtime.SourceOffset location = _scanner.location();
+					SourceOffset location = _scanner.location();
 					name = parseName(t);
 					if (name.op() == Operator.SYNTAX_ERROR)
 						return name;
@@ -1738,7 +1738,7 @@ public class Parser {
 		for (;;) {
 			t = _scanner.next();
 			ref<Node> annotations = null;
-			runtime.SourceOffset aLoc;
+			SourceOffset aLoc;
 			if (t == Token.ANNOTATION) {
 				annotations = parseAnnotations();
 				if (annotations.op() == Operator.SYNTAX_ERROR) {
@@ -1758,7 +1758,7 @@ public class Parser {
 			ref<Node> argument;
 			if (t == Token.ANNOTATION ||
 				t == Token.IDENTIFIER) {
-				runtime.SourceOffset location = _scanner.location();
+				SourceOffset location = _scanner.location();
 				name = parseName(t);
 				if (name.op() == Operator.SYNTAX_ERROR) {
 					*results = _tree.newNodeList(name);
@@ -1766,7 +1766,7 @@ public class Parser {
 				}
 				t = _scanner.next();
 				if (t == Token.LEFT_PARENTHESIS) {
-					runtime.SourceOffset loc = _scanner.location();
+					SourceOffset loc = _scanner.location();
 					ref<NodeList> parameters;
 					if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters)) {
 						*results = _tree.newNodeList(parameters.node);
@@ -1810,7 +1810,7 @@ public class Parser {
 		for (;;) {
 			ref<Node> id = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 			Token t = _scanner.next();
-			runtime.SourceOffset location = _scanner.location();
+			SourceOffset location = _scanner.location();
 
 			ref<NodeList> arguments = null;
 			ref<NodeList> last = null;
@@ -1860,7 +1860,7 @@ public class Parser {
 		MONITOR
 	}
 
-	private ref<Node> parseClass(ClassContext context, ref<Identifier> name, runtime.SourceOffset location) {
+	private ref<Node> parseClass(ClassContext context, ref<Identifier> name, SourceOffset location) {
 		ref<Node> extendsClause = null;
 		ref<Node> implementsClause = null;
 		ref<ClassDeclarator> classDef;

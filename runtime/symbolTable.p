@@ -1161,7 +1161,8 @@ class UnitScope extends Scope {
 			if (sym.class == PlainSymbol) {
 				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n != null) {
-					n.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), n.name());
+					if (n.definition() != null)
+						n.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), n.name());
 					sym.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), sym.name());
 				} else
 					namespaceScope.put(sym);
@@ -1498,13 +1499,13 @@ public class Scope {
 		printf("\n");
 	}
 	
-	public string sourceLocation(runtime.SourceOffset loc) {
+	public string sourceLocation(SourceOffset loc) {
 		string result;
 		ref<Unit> fs = unit();
 		if (fs != null)
 			result.printf("%s %d: ", fs.filename(), fs.lineNumber(loc) + 1);
 		else
-			result.printf("<no-file> @%d: ", loc.offset);
+			result.printf("<no-file> @%d: ", loc);
 		return result;
 	}
 	

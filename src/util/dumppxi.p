@@ -127,11 +127,6 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 			return null;
 		compiler.Arena arena();
 		x86_64.Disassembler d(&arena, 0, int(actual), &memory[0], &header);
-//		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
-//		d.setFunctionMap(&_functionMap);
-//		d.setOrdinalMap(&_ordinalMap);
-//		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-//		d.setVtablesClasses(&_vtables);
 		if (!d.disassemble()) {
 			printf("Disassembly FAILED\n");
 		}

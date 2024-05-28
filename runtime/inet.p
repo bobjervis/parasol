@@ -24,6 +24,7 @@ import parasol:log;
 import native:net;
 import native:linux;
 import native:C;
+import parasol:process;
 import parasol:runtime;
 import parasol:storage;
 import parasol:stream;
@@ -312,7 +313,7 @@ public class Socket {
 	/**
 	 * Close a socket.
 	 *
-	 * Note that on Linux this will cause any pendin operations on other threads to fail.
+	 * Note that on Linux this will cause any pending operations on other threads to fail.
 	 */
 	public void close() {
 		net.shutdown(_socketfd, net.SHUT_RDWR);
@@ -904,6 +905,23 @@ class SSLSocket extends Socket {
 		_certificatesFile = certificatesFile;
 		_privateKeyFile = privateKeyFile;
 		_dhParamsFile = dhParamsFile;
+		if (_cipherList == null)
+			_cipherList = "DEFAULT:-DHE-RSA-DES-CBC3-SHA:-DES-CBC3-SHA";
+		if (_certificatesFile == null) {
+			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
+			if (storage.exists(file))
+				_certificatesFile = file;
+		}
+		if (_privateKeyFile == null) {
+			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
+			if (storage.exists(file))
+				_certificatesFile = file;
+		}
+		if (_dhParamsFile == null) {
+			file := "/usr/parasol/latest/test/certificates/dhparams.pem";
+			if (storage.exists(file))
+				_certificatesFile = file;
+		}
 	}
 
 	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
@@ -1324,6 +1342,3 @@ for (int i = 0; i < decodeMap.length(); i++)
 for (int i = 0; i < encoding.length(); i++)
 	decodeMap[encoding[i]] = i;
 decodeMap['='] = -1;
-
-
-

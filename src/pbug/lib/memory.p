@@ -232,19 +232,19 @@ public class MemoryMap {
 			if (addr != 0) {
 				long contents;
 				boolean success;
-				(contents, success) = controller.peek(id(), addr);
+				(contents, success) = tracer.peek(id(), addr);
 				if (!success) {
 					logger.error("    Could not peek at address %p for tid %d", addr, id());
 					return null, null, -7;
 				}
 				logger.info("    contents = %p @ %p", contents, addr);
 				long offset;
-				(offset, success) = controller.peek(id(), addr + 8);
+				(offset, success) = tracer.peek(id(), addr + 8);
 				logger.info("    offset = %x", offset);
 /*
 				mm.print();
 				runtime.ExecutionContext ec;
-				if (!controller.copy(id(), contents, &ec, ec.bytes)) {
+				if (!tracer.copy(id(), contents, &ec, ec.bytes)) {
 					logger.error("    Could not copy data from pid %d @ %x [%x]", id(), contents, ec.bytes);
 					return null, null, -14;
 				}
@@ -447,7 +447,7 @@ class MemorySegment {
 				return null;
 			}
 	//		logger.info("Copying from %p for %x bytes", start, length);
-			if (!controller.copy(pid, start, _imageData, int(length))) {
+			if (!tracer.copy(pid, start, _imageData, int(length))) {
 				delete _imageData;
 				_imageData = null;
 				logger.error("    Couldn't copy image data @ %x from pid %d length %,d", pid, start, length);
@@ -561,7 +561,7 @@ public class DebugStack extends runtime.VirtualStack {
 		long contents;
 		boolean success;
 
-		(contents, success) = controller.peek(_thread.process().id(), virtualAddress);
+		(contents, success) = tracer.peek(_thread.process().id(), virtualAddress);
 		if (success)
 			return contents;
 		else

@@ -19,13 +19,6 @@
  * Date and Copyright holder of this code base.
  */
 #define COPYRIGHT_STRING "2015 Robert Jervis"
-/*
- * Major Release: Incremented when a breaking change is released
- * Minor Feature Release: Incremented when significant new features
- * are released.
- * Fix Release: Incremented when big fixes are released.
- */
-#define RUNTIME_VERSION "1.0.0"
 
 /*
  * The C++ code of the Parasol runtime is primarily in a shared object, so that symbols can be looked up (a

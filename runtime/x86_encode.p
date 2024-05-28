@@ -241,7 +241,7 @@ class X86_64Encoder extends Target {
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
-	protected runtime.SourceLocation[] _sourceLocations;
+	protected SourceLocation[] _sourceLocations;
 	protected int[ref<Unit>] _sourceFileMap;
 	protected DeferredTry[] _deferredTry;
 	protected ref<Segment>[Segments] _segments;
@@ -318,10 +318,10 @@ class X86_64Encoder extends Target {
 		smap.sourceFileCount = _segments[Segments.SOURCE_FILE_NAMES].length() / int.bytes;
 
 		for (i in _sourceLocations) {
-			ref<runtime.SourceLocation> sl = &_sourceLocations[i];
+			ref<SourceLocation> sl = &_sourceLocations[i];
 			_segments[Segments.SOURCE_LOCATIONS].append(&sl.offset, int.bytes);
 			_segments[Segments.SOURCE_FILE_INDICES].append(&sl.file.sourceFileIndex, int.bytes);
-			_segments[Segments.SOURCE_FILE_OFFSETS].append(&sl.location.offset, int.bytes);
+			_segments[Segments.SOURCE_FILE_OFFSETS].append(&sl.location, int.bytes);
 		}
 
 		appendExceptionEntry(int.MAX_VALUE, null);
@@ -884,7 +884,6 @@ class X86_64Encoder extends Target {
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 		d.setFunctionMap(&_functionMap);
 		d.setOrdinalMap(&_ordinalMap);
-		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		d.setVtablesClasses(&_vtables);
 		return d.disassemble();
 	}
@@ -956,7 +955,7 @@ class X86_64Encoder extends Target {
 			C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(filenameOffset), filename.c_str(), filename.length());
 			_segments[Segments.SOURCE_FILE_NAMES].append(&filenameOffset, int.bytes);
 			_segments[Segments.SOURCE_FILE_NAMES].fixup(segOffset, byte(Segments.BUILT_INS_TEXT), true);
-			ref<runtime.SourceOffset[]> lines = file.lines();
+			ref<compiler.SourceOffset[]> lines = file.lines();
 			int lineIndex = _segments[Segments.LINE_FILE_OFFSETS].length();
 			_segments[Segments.SOURCE_FILE_LINE_INDICES].append(&lineIndex, int.bytes);
 			int lineCount = lines.length();
@@ -1052,16 +1051,24 @@ class X86_64Encoder extends Target {
 			_emitting = cs;
 		}
 
-		void emitSourceLocation(ref<Unit> file, runtime.SourceOffset location, ref<X86_64Encoder> encoder) {
+		void emitSourceLocation(ref<Unit> file, compiler.SourceOffset location, ref<X86_64Encoder> encoder) {
 			ensureCodeSegment(encoder);
 			encoder.emitSourceFile(file);
 
-			runtime.SourceLocation loc = {
+			SourceLocation loc = {
 				file: file,
 				location: location,
 				offset: encoder._functionCode.length() - _emitting.codeOffset
 			};
-
+			last := _emitting.sourceLocations.length() - 1;
+			if (last >= 0) {
+				lastLoc := &_emitting.sourceLocations[last];
+				if (lastLoc.offset == loc.offset) {
+					lastLoc.file = file;
+					lastLoc.location = location;
+					return;
+				} 
+			}
 			_emitting.sourceLocations.append(loc, &encoder._storage);
 		}
 	
@@ -1194,6 +1201,12 @@ class X86_64Encoder extends Target {
 			}
 		}
 	}
+
+	class SourceLocation {
+		public ref<Unit>				file;			// Source file containing this location
+		public compiler.SourceOffset		location;		// Source byte offset
+		public int						offset;			// Code location
+	}
 	/**
 	 * 
 	 */
@@ -1209,7 +1222,7 @@ class X86_64Encoder extends Target {
 		public int length;
 		public int ordinal;
 		public int segmentOffset;
-		public runtime.SourceLocation[] sourceLocations;
+		public SourceLocation[] sourceLocations;
 		
 		CodeSegment() {
 			continuation = CC.NOP;
@@ -4031,7 +4044,7 @@ class X86_64Encoder extends Target {
 		return _t.stackDepth();
 	}
 	
-	void emitSourceLocation(ref<Unit> file, runtime.SourceOffset location) {
+	void emitSourceLocation(ref<Unit> file, compiler.SourceOffset location) {
 		_f.emitSourceLocation(file, location, this);
 	}
 	

@@ -40,6 +40,11 @@ package(name: build:parasollanguage.org, version: "${BUILD_VERSION}") {
 	file(name: *.p, src: src/pbuild/lib)
 }
 
+package(name: debug:parasollanguage.org, version: "${DEBUG_VERSION}") {
+	file(name: processControl.p, src: src/pbug/lib)
+	file(name: session.p, src: src/pbug/lib)
+}
+
 target(os: linux, cpu: x86-64) {
 	package(name: install:parasollanguage.org, manifest: false) {
 		folder(name: bin) {
@@ -100,6 +105,11 @@ target(os: linux, cpu: x86-64) {
 		}
 		folder(name: template) {
 			file(name: *, src: template)
+		}
+		folder(name: test) {
+			folder(name: certificates) {
+				file(name: *, src: test/certificates)
+			}
 		}
 	}
 

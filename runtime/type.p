@@ -246,6 +246,20 @@ public class BuiltInType extends Type {
 	}
 }
 
+public class TemplateClassType extends BuiltInType {
+	private ref<PlainSymbol> _name;
+
+	public TemplateClassType(ref<PlainSymbol> name, ref<Type> classType) {
+		super(runtime.TypeFamily.CLASS_DEFERRED);
+		setClassType(classType);
+		_name = name;
+	}
+
+	public string signature() {
+		return _name.name();
+	}
+}
+
 boolean[runtime.TypeFamily][runtime.TypeFamily] widens;
 
 widens.resize(runtime.TypeFamily.BUILTIN_TYPES);

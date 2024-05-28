@@ -278,64 +278,64 @@ public class SyntaxTree {
 			_root = parser.parseFile();
 		} else {
 			_scanner = null;
-			_root = newBlock(Operator.UNIT, false, runtime.SourceOffset.OUT_OF_FILE);
+			_root = newBlock(Operator.UNIT, false, OUT_OF_FILE);
 			_root.add(MessageId.FILE_NOT_READ, _pool);
 		}
 	}
 
-	public ref<Lock> newLock(ref<Node> lockReference, ref<Node> block, runtime.SourceOffset location) {
+	public ref<Lock> newLock(ref<Node> lockReference, ref<Node> block, SourceOffset location) {
 		return _pool new Lock(lockReference, block, location);
 	}
 
-	public ref<Block> newBlock(Operator op, boolean inSwitch, runtime.SourceOffset location) {
+	public ref<Block> newBlock(Operator op, boolean inSwitch, SourceOffset location) {
 		return _pool new Block(op, inSwitch, location);
 	}
 
-	public ref<ClassDeclarator> newClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, runtime.SourceOffset location) {
+	public ref<ClassDeclarator> newClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, SourceOffset location) {
 		return _pool new ClassDeclarator(op, name, extendsClause, location);
 	}
 
-	public ref<Template> newTemplate(ref<Identifier> name, runtime.SourceOffset location) {
+	public ref<Template> newTemplate(ref<Identifier> name, SourceOffset location) {
 		return _pool new Template(name, this, location);
 	}
 
-	public ref<Reference> newReference(ref<Variable> v, boolean definition, runtime.SourceOffset location) {
+	public ref<Reference> newReference(ref<Variable> v, boolean definition, SourceOffset location) {
 		return _pool new Reference(v, 0, definition, location);
 	}
 	
-	public ref<Reference> newEllipsisReference(ref<Type> type, runtime.SourceOffset location) {
+	public ref<Reference> newEllipsisReference(ref<Type> type, SourceOffset location) {
 		return _pool new Reference(type, location);
 	}
 	
-	public ref<Reference> newReference(ref<Variable> v, int offset, boolean definition, runtime.SourceOffset location) {
+	public ref<Reference> newReference(ref<Variable> v, int offset, boolean definition, SourceOffset location) {
 		return _pool new Reference(v, offset, definition, location);
 	}
 	
-	public ref<Identifier> newIdentifier(substring value, runtime.SourceOffset location) {
+	public ref<Identifier> newIdentifier(substring value, SourceOffset location) {
 		return _pool new Identifier(_pool.newCompileString(value), location);
 	}
 
-	public ref<Identifier> newIdentifier(ref<Symbol> symbol, runtime.SourceOffset location) {
+	public ref<Identifier> newIdentifier(ref<Symbol> symbol, SourceOffset location) {
 		return _pool new Identifier(symbol, location);
 	}
 
-	public ref<Import> newImport(ref<Identifier> importedSymbol, ref<Ternary> namespaceNode, runtime.SourceOffset location) {
+	public ref<Import> newImport(ref<Identifier> importedSymbol, ref<Ternary> namespaceNode, SourceOffset location) {
 		return _pool new Import(importedSymbol, namespaceNode, location);
 	}
 
-	public ref<Map> newMap(ref<Node> valueType, ref<Node> keyType, ref<Node> seed, runtime.SourceOffset location) {
+	public ref<Map> newMap(ref<Node> valueType, ref<Node> keyType, ref<Node> seed, SourceOffset location) {
 		return _pool new Map(valueType, keyType, seed, location);
 	}
 
-	public ref<Binary> newDeclaration(ref<Node> left, ref<Node> right, runtime.SourceOffset location) {
+	public ref<Binary> newDeclaration(ref<Node> left, ref<Node> right, SourceOffset location) {
 		return newBinary(Operator.DECLARATION, left.rewriteDeclarators(this), right, location);
 	}
 
-	public ref<Binary> newBinary(Operator op, ref<Node> left, ref<Node> right, runtime.SourceOffset location) {
+	public ref<Binary> newBinary(Operator op, ref<Node> left, ref<Node> right, SourceOffset location) {
 		return _pool new Binary(op, left, right, location);
 	}
 
-	public ref<Unary> newUnary(Operator op, ref<Node> operand, runtime.SourceOffset location) {
+	public ref<Unary> newUnary(Operator op, ref<Node> operand, SourceOffset location) {
 		return _pool new Unary(op, operand, location);
 	}
 
@@ -345,80 +345,80 @@ public class SyntaxTree {
 		return u;
 	}
 	
-	public ref<Ternary> newTernary(Operator op, ref<Node> left, ref<Node> middle, ref<Node> right, runtime.SourceOffset location) {
+	public ref<Ternary> newTernary(Operator op, ref<Node> left, ref<Node> middle, ref<Node> right, SourceOffset location) {
 		return _pool new Ternary(op, left, middle, right, location);
 	}
 
-	public ref<Try> newTry(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, runtime.SourceOffset location) {
+	public ref<Try> newTry(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, SourceOffset location) {
 		return _pool new Try(body, finallyClause, catchList, location);
 	}
 	
-	public ref<Loop> newLoop(runtime.SourceOffset location) {
+	public ref<Loop> newLoop(SourceOffset location) {
 		return _pool new Loop(location);
 	}
 
-	public ref<For> newFor(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, runtime.SourceOffset location) {
+	public ref<For> newFor(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, SourceOffset location) {
 		return _pool new For(op, initializer, test, increment, body, location);
 	}
 
-	public ref<Selection> newSelection(ref<Node> left, substring name, runtime.SourceOffset location) {
+	public ref<Selection> newSelection(ref<Node> left, substring name, SourceOffset location) {
 		return _pool new Selection(left, _pool.newCompileString(name), location);
 	}
 
-	public ref<Selection> newSelection(ref<Node> left, ref<Symbol> symbol, boolean indirect, runtime.SourceOffset location) {
+	public ref<Selection> newSelection(ref<Node> left, ref<Symbol> symbol, boolean indirect, SourceOffset location) {
 		return _pool new Selection(left, symbol, indirect, location);
 	}
 
-	public ref<Return> newReturn(ref<NodeList> expressions, runtime.SourceOffset location) {
+	public ref<Return> newReturn(ref<NodeList> expressions, SourceOffset location) {
 		return _pool new Return(expressions, location);
 	}
 
 	public ref<FunctionDeclaration> newFunctionDeclaration(FunctionDeclaration.Category functionCategory, 
-						ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, runtime.SourceOffset location) {
+						ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, SourceOffset location) {
 		return _pool new FunctionDeclaration(functionCategory, returnType, name, arguments, this, location);
 	}
 
-	public ref<Call> newCall(Operator op, ref<Node> target, ref<NodeList> arguments, runtime.SourceOffset location) {
+	public ref<Call> newCall(Operator op, ref<Node> target, ref<NodeList> arguments, SourceOffset location) {
 		return _pool new Call(op, target, arguments, location);
 	}
 
-	public ref<Call> newCall(ref<ParameterScope> overloadScope, CallCategory category, ref<Node> target, ref<NodeList> arguments, runtime.SourceOffset location, ref<CompileContext> compileContext) {
+	public ref<Call> newCall(ref<ParameterScope> overloadScope, CallCategory category, ref<Node> target, ref<NodeList> arguments, SourceOffset location, ref<CompileContext> compileContext) {
 		return _pool new Call(overloadScope, category, target, arguments, location, compileContext);
 	}
 
-	public ref<DestructorList> newDestructorList(ref<NodeList> destructors, runtime.SourceOffset location) {
+	public ref<DestructorList> newDestructorList(ref<NodeList> destructors, SourceOffset location) {
 		return _pool new DestructorList(destructors, location);
 	}
 	
-	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, runtime.SourceOffset location) {
+	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, SourceOffset location) {
 		return _pool new EllipsisArguments(arguments, location);
 	}
 	
-	public ref<StackArgumentAddress> newStackArgumentAddress(int offset, runtime.SourceOffset location) {
+	public ref<StackArgumentAddress> newStackArgumentAddress(int offset, SourceOffset location) {
 		return _pool new StackArgumentAddress(offset, location);
 	}
 	
-	public ref<Jump> newJump(Operator op, runtime.SourceOffset location) {
+	public ref<Jump> newJump(Operator op, SourceOffset location) {
 		return _pool new Jump(op, location);
 	}
 	
-	public ref<Leaf> newLeaf(Operator op, runtime.SourceOffset location) {
+	public ref<Leaf> newLeaf(Operator op, SourceOffset location) {
 		return _pool new Leaf(op, location);
 	}
 
-	public ref<InternalLiteral> newInternalLiteral(long value, runtime.SourceOffset location) {
+	public ref<InternalLiteral> newInternalLiteral(long value, SourceOffset location) {
 		return _pool new InternalLiteral(value, location);
 	}
 	
-	public ref<Constant> newConstant(long value, runtime.SourceOffset location) {
+	public ref<Constant> newConstant(long value, SourceOffset location) {
 		return newConstant(Operator.INTEGER, string(value), location);
 	}
 	
-	public ref<Constant> newConstant(Operator op, substring value, runtime.SourceOffset location) {
+	public ref<Constant> newConstant(Operator op, substring value, SourceOffset location) {
 		return _pool new Constant(op, _pool.newCompileString(value), location);
 	}
 
-	public ref<SyntaxError> newSyntaxError(runtime.SourceOffset location) {
+	public ref<SyntaxError> newSyntaxError(SourceOffset location) {
 		return _pool new SyntaxError(location);
 	}
 
@@ -461,7 +461,7 @@ public class SyntaxTree {
 		return _filename;
 	}
 
-	public string sourceLine(runtime.SourceOffset location) {
+	public string sourceLine(SourceOffset location) {
 		if (_filename != null)
 			return storage.makeCompactPath(_filename, "foo") + " " + string(_scanner.file().lineNumber(location) + 1);
 		else
@@ -477,7 +477,7 @@ public class Lock extends Node {
 	private ref<Node> _releaseCallException;
 	public ref<Scope> scope;
 
-	Lock(ref<Node> lockReference, ref<Node> body, runtime.SourceOffset location) {
+	Lock(ref<Node> lockReference, ref<Node> body, SourceOffset location) {
 		super(Operator.LOCK, location);
 		_lockReference = lockReference;
 		_body = body;
@@ -722,9 +722,9 @@ public class Block extends Node {
 	private ref<NodeList> _last;
 	private boolean _inSwitch;
 	public ref<Scope> scope;
-	public runtime.SourceOffset closeCurlyLocation;
+	public SourceOffset closeCurlyLocation;
 
-	Block(Operator op, boolean inSwitch, runtime.SourceOffset location) {
+	Block(Operator op, boolean inSwitch, SourceOffset location) {
 		super(op, location);
 		_inSwitch = inSwitch;
 	}
@@ -973,7 +973,7 @@ public class ClassDeclarator extends Block {
 	private ref<NodeList> _last;
 	private runtime.TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
-	ClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, runtime.SourceOffset location) {
+	ClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, SourceOffset location) {
 		super(op, false, location);
 		_name = name;
 		_extends = extendsClause;
@@ -1321,7 +1321,7 @@ public class ClassDeclarator extends Block {
 public class InternalLiteral extends Node {
 	private long _value;
 	
-	InternalLiteral(long value, runtime.SourceOffset location) {
+	InternalLiteral(long value, SourceOffset location) {
 		super(Operator.INTERNAL_LITERAL, location);
 		_value = value;
 	}
@@ -1446,7 +1446,7 @@ public class Constant extends Node {
 	public int offset;					// For constants that get stored out-of-line, like FP data,
 										// this records the offset into the data section where the data was assigned.
 	
-	Constant(Operator op, substring value, runtime.SourceOffset location) {
+	Constant(Operator op, substring value, SourceOffset location) {
 		super(op, location);
 		_value = value;
 	}
@@ -1739,7 +1739,7 @@ public class For extends Node {
 	private ref<Node> _body;
 	public ref<Scope> scope;
 	
-	For(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, runtime.SourceOffset location) {
+	For(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, SourceOffset location) {
 		super(op, location);
 		_initializer = initializer;
 		_test = test;
@@ -1938,7 +1938,7 @@ class Import extends Node {
 	private boolean _importResolved;
 	private ref<Ternary> _namespaceNode;
 
-	Import(ref<Identifier> localIdentifier, ref<Ternary> namespaceNode, runtime.SourceOffset location) {
+	Import(ref<Identifier> localIdentifier, ref<Ternary> namespaceNode, SourceOffset location) {
 		super(Operator.IMPORT, location);
 		_localIdentifier = localIdentifier;
 		_namespaceNode = namespaceNode;
@@ -2080,7 +2080,7 @@ public class Jump extends Node {
 	private ref<Scope> _leavingScope;			// This is the outer-most scope we will exit when we take this jump
 	private ref<Scope> _jumpFromScope;			// This is the inner-most scope we will exit when we take this jump
 	
-	Jump(Operator op, runtime.SourceOffset location) {
+	Jump(Operator op, SourceOffset location) {
 		super(op, location);
 	}
 
@@ -2214,7 +2214,7 @@ public class Jump extends Node {
 }
 
 class Leaf extends Node {
-	Leaf(Operator op, runtime.SourceOffset location) {
+	Leaf(Operator op, SourceOffset location) {
 		super(op, location);
 	}
 
@@ -2392,7 +2392,7 @@ public class Loop extends Node {
 	
 	ref<Scope> scope;
 
-	Loop(runtime.SourceOffset location) {
+	Loop(SourceOffset location) {
 		super(Operator.LOOP, location);
 	}
 	
@@ -2637,7 +2637,7 @@ class Map extends Node {
 	private ref<Node> _keyType;
 	private ref<Node> _seed;
 
-	Map(ref<Node> valueType, ref<Node> keyType, ref<Node> seed, runtime.SourceOffset location) {
+	Map(ref<Node> valueType, ref<Node> keyType, ref<Node> seed, SourceOffset location) {
 		super(Operator.MAP, location);
 		_valueType = valueType;
 		_keyType = keyType;
@@ -2755,7 +2755,7 @@ class Map extends Node {
 }
 
 class SyntaxError extends Node {
-	SyntaxError(runtime.SourceOffset location) {
+	SyntaxError(SourceOffset location) {
 		super(Operator.SYNTAX_ERROR, location);
 	}
 
@@ -2798,7 +2798,7 @@ public class Template extends Node {
 	public boolean isMonitor;
 	public ref<ClassDeclarator> classDef;
 
-	Template(ref<Identifier> name, ref<SyntaxTree> tree, runtime.SourceOffset location) {
+	Template(ref<Identifier> name, ref<SyntaxTree> tree, SourceOffset location) {
 		super(Operator.TEMPLATE, location);
 		_name = name;
 		_tree = tree;
@@ -2953,7 +2953,7 @@ public class Ternary extends Node {
 	ref<Node>	_middle;
 	ref<Node>	_right;
 
-	Ternary(Operator op, ref<Node> left, ref<Node> middle, ref<Node> right, runtime.SourceOffset location) {
+	Ternary(Operator op, ref<Node> left, ref<Node> middle, ref<Node> right, SourceOffset location) {
 		super(op, location);
 		_left = left;
 		_middle = middle;
@@ -3282,7 +3282,7 @@ public class Try extends Node {
 	ref<Node>		_finally;
 	ref<NodeList>	_catchList;
 	
-	Try(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, runtime.SourceOffset location) {
+	Try(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, SourceOffset location) {
 		super(Operator.TRY, location);
 		_body = body;
 		_finally = finallyClause;
@@ -3444,7 +3444,7 @@ public class Try extends Node {
 
 public class Node {
 	private Operator _op;
-	private runtime.SourceOffset _location;
+	private SourceOffset _location;
 	private ref<Commentary> _commentary;
 
 	public ref<Type> type;
@@ -3452,7 +3452,7 @@ public class Node {
 	public byte nodeFlags;
 	public int sethi;
 	
-	Node(Operator op, runtime.SourceOffset location) {
+	Node(Operator op, SourceOffset location) {
 		_op = op;
 		_location = location;
 	}
@@ -4008,12 +4008,12 @@ public class Node {
 			printf(" nodeFlags %x", int(nodeFlags));
 		if (sethi != 0)
 			printf(" sethi %d", sethi);
-		printf(" loc %d", _location.offset);
+		printf(" loc %d", _location);
 		assert(indent < 1000);
 	}
 
 
-	public runtime.SourceOffset location() { 
+	public SourceOffset location() { 
 		return _location; 
 	}
 	

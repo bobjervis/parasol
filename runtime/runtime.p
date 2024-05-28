@@ -297,6 +297,15 @@ public class Image {
 	 * Parasol code.
 	 */
 	public string, int getSourceLocation(long ip) {
+		return getSourceLocation(ip, false);
+	}
+
+
+	public boolean atSourceLocation(long ip) {
+		return getSourceLocation(ip, true) != null;
+	}
+
+	private string, int getSourceLocation(long ip, boolean exact) {
 		if (ip < _imageAddr ||
 			highCodeAddress() <= ip)
 			return null, -1;
@@ -325,7 +334,14 @@ public class Image {
 		
 		int[] lookup(_codeAddresses, _sourceMap.codeLocationsCount);
 			
-		int index = lookup.binarySearchClosestNotGreater(offset);
+		int index;
+
+		if (exact) {
+			index = lookup.binarySearch(offset);
+			if (index < 0)
+				return null, -1;
+		} else
+			index = lookup.binarySearchClosestNotGreater(offset);
 //		printf("offset = %x index = %d\n", offset, index);
 //		printf("bucket offset %x\n", _codeAddresses[index]);
 //		printf("  next offset %x\n", _codeAddresses[index + 1]);
@@ -348,6 +364,7 @@ public class Image {
 //		printf("lineNumber = %d base line number %d\n", lineNumber, _baseLineNumbers[fileIndex]);
 		return filename, lineNumber;
 	}
+
 	/** @ignore */
 	public long codeAddress() {
 		return _imageAddr;
@@ -436,73 +453,6 @@ public class ExecutionContext {
 	public ref<thread.Thread> _parasolThread;
 	public pointer<address> _runtimeParameters;
 	public int _runtimeParametersCount;
-}
-
-public class SourceLocation {
-	public ref<SourceFile>		file;			// Source file containing this location
-	public SourceOffset			location;		// Source byte offset
-	public int					offset;			// Code location
-}
-
-public class SourceFile {
-	private string _filename;
-	private SourceOffset[] _lines;
-	private int _baseLineNumber;				// Line number of first character in scanner input.
-
-	public int sourceFileIndex;					// Set during code generation to indicate that a source
-												// file entry has been allocated in the image
-
-	public SourceFile(string filename) {
-		_filename = filename;
-		sourceFileIndex = -1;
-	}
-
-	public SourceFile(string filename, int baseLineNumber) {
-		_filename = filename;
-		_baseLineNumber = baseLineNumber;
-	}
-
-	public string filename() {
-		return _filename;
-	}
-
-	public void append(SourceOffset location) {
-		_lines.append(location);
-	}
-
-	public int lineNumber(SourceOffset location) {
-		int x = _lines.binarySearchClosestGreater(location);
-		return _baseLineNumber + x;
-	}
-
-	public ref<SourceOffset[]> lines() {
-		return &_lines;
-	}
-
-	public int baseLineNumber() {
-		return _baseLineNumber;
-	}
-}
-	
-public class SourceOffset {
-	public static SourceOffset OUT_OF_FILE(-1);
-
-	public int		offset;
-	
-	public SourceOffset() {
-	}
-	
-	public SourceOffset(int v) {
-		offset = v;
-	}
-
-	public int compare(SourceOffset loc) {
-		return offset - loc.offset;
-	}
-
-	public boolean isInFile() {
-		return offset != OUT_OF_FILE.offset;
-	}
 }
 /** @ignore */
 public ref<Thread> parasolThread() {

@@ -29,6 +29,8 @@ sudo chmod +rx -R $INSTALL/bin
 sudo chmod +rx -R $INSTALL/template
 sudo chmod +rx -R $INSTALL/src
 sudo chmod +rx -R $INSTALL/runtime
+sudo chmod +rx -R $INSTALL/test
+sudo chmod +rx -R $INSTALL/test/certificates
 
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest

@@ -217,7 +217,7 @@ string transformDocLink(ref<compiler.Doclet> doclet, int location, string linkTe
 }
 
 private void printLinkError(ref<compiler.Doclet> doclet, int location, string linkText) {
-	runtime.SourceOffset loc(location);
+	compiler.SourceOffset loc = location;
 	if (doclet == null) {
 		printf("Link '%s' is undefined\n", linkText);
 		return;
@@ -227,6 +227,6 @@ private void printLinkError(ref<compiler.Doclet> doclet, int location, string li
 	if (lineNumber >= 0)
 		printf("%s %d: Link '%s' is undefined\n", doclet.unit.filename(), lineNumber + 1, linkText);
 	else
-		printf("%s [byte %d]: Link '%s' is undefined\n", doclet.unit.filename(), loc.offset, linkText);
+		printf("%s [byte %d]: Link '%s' is undefined\n", doclet.unit.filename(), location, linkText);
 }
 

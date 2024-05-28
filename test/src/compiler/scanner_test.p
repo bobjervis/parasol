@@ -11,10 +11,11 @@
    distributed under the License is distributed on an "AS IS" BASIS,
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
-   limitations under the License.
+   limitations under the License..offs
  */
+import parasol:compiler;
 import parasol:process;
-import parasol:runtime;
+//import parasol:runtime;
 import parasol:storage;
 import parasol:random.Random;
 import parasol:compiler.Unit;
@@ -79,7 +80,7 @@ int main(string[] args) {
 
 class TokenInfo {
 	public Token token;
-	public runtime.SourceOffset location;
+	public compiler.SourceOffset location;
 	public string value;
 }
 
@@ -128,7 +129,7 @@ boolean scan(string filename) {
 		case ANNOTATION:
 			printf("'%s' ", ti.value);
 		}
-		printf("@ %d(%d)\n", fs.lineNumber(ti.location) + 1, ti.location.offset);
+		printf("@ %d(%d)\n", fs.lineNumber(ti.location) + 1, ti.location);
 		tokens.append(ti);
 		// TODO: The following line is hacky, hacky, hacky - should not be needed.
 		C.memset(&ti, 0, ti.bytes);
@@ -142,7 +143,7 @@ boolean scan(string filename) {
 	for (int i = 0; i < tokens.length(); i++) {
 		nscanner.seek(tokens[i].location);
 		Token t = nscanner.next();
-		int loc = tokens[i].location.offset;
+		int loc = tokens[i].location;
 		if (loc > reference.length())
 			loc = reference.length();
 		int endloc = loc + 4;
@@ -152,7 +153,7 @@ boolean scan(string filename) {
 		if (t != tokens[i].token) {
 			printf("[%4d] Tokens (%s:%s) {%s} do not match at reported line(location) %d(%d)\n", i, 
 						string(tokens[i].token), string(t), quot, fs.lineNumber(tokens[i].location) + 1, 
-						tokens[i].location.offset);
+						tokens[i].location);
 			return false;
 		}
 		switch (t) {
@@ -165,14 +166,14 @@ boolean scan(string filename) {
 			string s = nscanner.value();
 			if (tokens[i].value != s) {
 				printf("[%4d] Token %s does not match value: %s:%s {%s} %d(%d)\n", i, string(t), 
-						tokens[i].value, s, quot, fs.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
+						tokens[i].value, s, quot, fs.lineNumber(tokens[i].location) + 1, tokens[i].location);
 				return false;
 			}
 		}
-		if (tokens[i].location.offset != nscanner.location().offset) {
+		if (tokens[i].location != nscanner.location()) {
 			printf("[%4d] Token %s reports different location: %d(%d) : %d(%d)\n", i, string(t), 
-				fs.lineNumber(tokens[i].location) + 1, tokens[i].location.offset, 
-				fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+				fs.lineNumber(tokens[i].location) + 1, tokens[i].location, 
+				fs.lineNumber(nscanner.location()) + 1, nscanner.location());
 			return false;
 		}
 		if (scannerTestCommand.verboseOption.value) {
@@ -183,11 +184,11 @@ boolean scan(string filename) {
 			case CHARACTER:
 			case STRING:
 			case ANNOTATION:
-				printf("[%4d] %s '%s' %d(%d)\n", i, string(t), tokens[i].value, fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+				printf("[%4d] %s '%s' %d(%d)\n", i, string(t), tokens[i].value, fs.lineNumber(nscanner.location()) + 1, nscanner.location());
 				break;
 				
 			default:
-				printf("[%4d] %s %d(%d)\n", i, string(t), fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+				printf("[%4d] %s %d(%d)\n", i, string(t), fs.lineNumber(nscanner.location()) + 1, nscanner.location());
 			}
 		}
 	}
@@ -211,7 +212,7 @@ void dumpTokens(ref<TokenInfo[]> tokens, ref<Scanner> scanner) {
 		case ANNOTATION:
 			printf("'%s' ", (*tokens)[i].value);
 		}
-		printf("@ %d(%d)\n", scanner.file().lineNumber((*tokens)[i].location) + 1, (*tokens)[i].location.offset);
+		printf("@ %d(%d)\n", scanner.file().lineNumber((*tokens)[i].location) + 1, (*tokens)[i].location);
 	}	
 }
 

@@ -65,7 +65,7 @@ class Paradoc extends process.Command {
 		paradoc.homeCaptionOption = stringOption('h', "home",
 					"Provides the caption string that will appear in the 'home' button of " +
 					"the navigation bar on every page. " +
-					"Default: No home buffon will appear in the navigation bar");
+					"Default: No home button will appear in the navigation bar");
 		helpOption('?', "help",
 					"Displays this help.");
 		versionOption("version",

@@ -312,8 +312,10 @@ public class PlainSymbol extends Symbol {
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
 					if (_type.family() == TypeFamily.VOID)
 						_type = compileContext.errorType();
-					if (_enclosing.storageClass() == StorageClass.TEMPLATE && _type.family() == TypeFamily.CLASS_VARIABLE)
-						_type = compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
+					if (_enclosing.storageClass() == StorageClass.TEMPLATE && _type.family() == TypeFamily.CLASS_VARIABLE) {
+						t := compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
+						_type = compileContext.pool().newTemplateClassType(this, t.classType());
+					}
 				}
 			}
 		}
@@ -624,7 +626,7 @@ public class StubOverload extends OverloadInstance {
 			_type = scope.type = compileContext.pool().newFunctionType(returns, parameters, false);
 
 			ref<SyntaxTree> tree = compileContext.tree();
-			runtime.SourceOffset loc = _interfaceType.definition().location();
+			SourceOffset loc = _interfaceType.definition().location();
 			ref<Node> n = tree.newIdentifier("object", loc);
 			scope.define(Operator.PUBLIC, StorageClass.PARAMETER, null, n, parameters[0], compileContext.pool());
 			n = tree.newIdentifier("params", loc);
@@ -651,7 +653,7 @@ public class ProxyOverload extends OverloadInstance {
 			ref<Symbol> sym = compileContext.forest().getSymbol("parasol", "rpc.Client", compileContext);
 			if (sym != null) {
 	//			printf(" --- assignThisType(%s) ---\n", _interfaceType.signature());
-				runtime.SourceOffset loc = _interfaceType.definition().location();
+				SourceOffset loc = _interfaceType.definition().location();
 				ref<SyntaxTree> tree = compileContext.tree();
 
 				ref<Type>[] returns = [ _interfaceType ];

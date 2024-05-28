@@ -2140,6 +2140,10 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new BuiltInType(family);
 	}
 
+	public ref<TemplateClassType> newTemplateClassType(ref<PlainSymbol> name, ref<Type> classType) {
+		return super new TemplateClassType(name, classType);
+	}
+
 	public ref<TypedefType> newTypedefType(TypeFamily family, ref<Type> wrappedType) {
 		return super new TypedefType(family, wrappedType);
 	}
@@ -2370,7 +2374,7 @@ public class DomainForest extends VolatileDomainForest {
 
 /**
  */
-public class Unit extends runtime.SourceFile {
+public class Unit extends SourceFile {
 	private int _prefixLength;			// The portion of the filename that contains the package directory (including the trailing slash)
 	private boolean _parsed;
 	private boolean _imported;
@@ -2613,7 +2617,7 @@ public class Unit extends runtime.SourceFile {
 	}
 */
 	public void dumpMessage(ref<Node> node, ref<Commentary> comment) {
-		if (!node.location().isInFile()) {
+		if (!isInFile(node.location())) {
 			printf("%s :", filename()); 
 			printf(" %s\n", comment.message());
 		} else {
@@ -2621,7 +2625,7 @@ public class Unit extends runtime.SourceFile {
 			if (lineNumber >= 0)
 				printf("%s %d: %s\n", filename(), lineNumber + 1, comment.message());
 			else
-				printf("%s [byte %d]: %s\n", filename(), node.location().offset, comment.message());
+				printf("%s [byte %d]: %s\n", filename(), node.location(), comment.message());
 		}
 	}
 
@@ -2666,6 +2670,54 @@ void allNodes(ref<Unit> file, ref<Node> n, void(ref<Unit>, ref<Node>, ref<Commen
 			callback(file, messages[j].node, messages[j].commentary, arg);
 		}
 	}
+}
+
+public class SourceFile {
+	private string _filename;
+	private SourceOffset[] _lines;
+	private int _baseLineNumber;				// Line number of first character in scanner input.
+
+	public int sourceFileIndex;					// Set during code generation to indicate that a source
+												// file entry has been allocated in the image
+
+	public SourceFile(string filename) {
+		_filename = filename;
+		sourceFileIndex = -1;
+	}
+
+	public SourceFile(string filename, int baseLineNumber) {
+		_filename = filename;
+		_baseLineNumber = baseLineNumber;
+	}
+
+	public string filename() {
+		return _filename;
+	}
+
+	public void append(SourceOffset location) {
+		_lines.append(location);
+	}
+
+	public int lineNumber(SourceOffset location) {
+		int x = _lines.binarySearchClosestGreater(location);
+		return _baseLineNumber + x;
+	}
+
+	public ref<SourceOffset[]> lines() {
+		return &_lines;
+	}
+
+	public int baseLineNumber() {
+		return _baseLineNumber;
+	}
+}
+	
+public class SourceOffset = int;
+
+public SourceOffset OUT_OF_FILE = -1;
+
+public boolean isInFile(SourceOffset offset) {
+	return offset != OUT_OF_FILE;
 }
 
 class BuiltInMap {

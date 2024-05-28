@@ -48,13 +48,13 @@ public class Call extends ParameterBag {
 	private ref<NodeList> _stackArguments;			// Those call arguments that must be pushed on the stack (target dependent)
 	private boolean _folded;						// Set to true if the call arguments have been folded
 	
-	Call(Operator op, ref<Node> target, ref<NodeList> arguments, runtime.SourceOffset location) {
+	Call(Operator op, ref<Node> target, ref<NodeList> arguments, SourceOffset location) {
 		super(op, arguments, location);
 		_target = target;
 		_category = CallCategory.ERROR;
 	}
 	
-	Call(ref<ParameterScope> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, runtime.SourceOffset location, ref<CompileContext> compileContext) {
+	Call(ref<ParameterScope> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, SourceOffset location, ref<CompileContext> compileContext) {
 		super(Operator.CALL, arguments, location);
 		_target = target;
 		_overload = overload;
@@ -501,7 +501,7 @@ public class Call extends ParameterBag {
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);
 					long v = b.left().foldInt(compileContext.target, compileContext);
-					InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? v : v + 1, runtime.SourceOffset());
+					InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? v : v + 1, SourceOffset());
 					if (v < 0 || !il.representedBy(indexType)) {
 						b.left().add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
 						type = compileContext.errorType();
@@ -515,7 +515,7 @@ public class Call extends ParameterBag {
 					} else {
 						ref<Interval> i = &intervals[intervals.length() - 1];
 						i.end++;
-						InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? i.end : i.end + 1, runtime.SourceOffset());
+						InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? i.end : i.end + 1, SourceOffset());
 						if (i.end < 0 || !il.representedBy(indexType)) {
 							nl.node.add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
 							type = nl.node.type = compileContext.errorType();
@@ -1511,7 +1511,7 @@ public class FunctionDeclaration extends ParameterBag {
 										// and have code generated.
 	
 	FunctionDeclaration(Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, 
-				ref<SyntaxTree> tree, runtime.SourceOffset location) {
+				ref<SyntaxTree> tree, SourceOffset location) {
 		super(Operator.FUNCTION, arguments, location);
 		_functionCategory = functionCategory;
 		if (returnType != null) {
@@ -1783,7 +1783,7 @@ public class FunctionDeclaration extends ParameterBag {
 }
 
 public class DestructorList extends ParameterBag {
-	DestructorList(ref<NodeList> destructors, runtime.SourceOffset location) {
+	DestructorList(ref<NodeList> destructors, SourceOffset location) {
 		super(Operator.DESTRUCTOR_LIST, destructors, location);
 	}
 
@@ -1875,7 +1875,7 @@ public class DestructorList extends ParameterBag {
 class ParameterBag extends Node {
 	protected ref<NodeList> _arguments;
 	
-	ParameterBag(Operator op, ref<NodeList> arguments, runtime.SourceOffset location) {
+	ParameterBag(Operator op, ref<NodeList> arguments, SourceOffset location) {
 		super(op, location);
 		_arguments = arguments;
 	}
@@ -1907,7 +1907,7 @@ class ParameterBag extends Node {
 public class StackArgumentAddress extends Node {
 	int	_offset;
 	
-	StackArgumentAddress(int offset, runtime.SourceOffset location) {
+	StackArgumentAddress(int offset, SourceOffset location) {
 		super(Operator.STACK_ARGUMENT_ADDRESS, location);
 		_offset = offset;
 	}
@@ -1939,7 +1939,7 @@ public class StackArgumentAddress extends Node {
 }
 
 public class EllipsisArguments extends ParameterBag {
-	EllipsisArguments(ref<NodeList> args, runtime.SourceOffset location) {
+	EllipsisArguments(ref<NodeList> args, SourceOffset location) {
 		super(Operator.ELLIPSIS_ARGUMENTS, args, location);
 	}
 	
@@ -2026,7 +2026,7 @@ public class Return extends ParameterBag {
 	private ref<NodeList> _liveSymbols;
 	private boolean _multiReturnOfMultiCall;
 	
-	Return(ref<NodeList> expressions, runtime.SourceOffset location) {
+	Return(ref<NodeList> expressions, SourceOffset location) {
 		super(Operator.RETURN, expressions, location);
 	}
 

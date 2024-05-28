@@ -769,10 +769,10 @@ class RunObject extends script.Object {
 }
 
 boolean checkInOrder(ref<Node> n, string source) {
-	runtime.SourceOffset loc;
+	compiler.SourceOffset loc;
 	boolean success = true;
 
-	loc.offset = 0;
+	loc = 0;
 	if (!n.traverse(Node.Traversal.IN_ORDER, checkAscending, &loc)) {
 		printf("IN_ORDER:\n");
 		if (source != null)
@@ -781,7 +781,7 @@ boolean checkInOrder(ref<Node> n, string source) {
 			n.print(4);
 		success = false;
 	}
-	loc.offset = int.MAX_VALUE;
+	loc = int.MAX_VALUE;
 	if (!n.traverse(Node.Traversal.REVERSE_IN_ORDER, checkDescending, &loc)) {
 		printf("REVERSE_IN_ORDER:\n");
 		if (source != null)
@@ -797,9 +797,9 @@ TraverseAction checkAscending(ref<Node> n, address data) {
 	if (n.op() == Operator.CAST)
 		return TraverseAction.CONTINUE_TRAVERSAL;
 		
-	ref<runtime.SourceOffset> locp = ref<runtime.SourceOffset>(data);
+	ref<compiler.SourceOffset> locp = ref<compiler.SourceOffset>(data);
 
-	if (locp.offset > n.location().offset) {
+	if (*locp > n.location()) {
 		return TraverseAction.ABORT_TRAVERSAL;
 	}
 	*locp = n.location();
@@ -810,9 +810,9 @@ static TraverseAction checkDescending(ref<Node> n, address data) {
 	if (n.op() == Operator.CAST)
 		return TraverseAction.CONTINUE_TRAVERSAL;
 
-	ref<runtime.SourceOffset> locp = ref<runtime.SourceOffset>(data);
+	ref<compiler.SourceOffset> locp = ref<compiler.SourceOffset>(data);
 
-	if (locp.offset < n.location().offset) {
+	if (*locp < n.location()) {
 		return TraverseAction.ABORT_TRAVERSAL;
 	}
 	*locp = n.location();
@@ -825,7 +825,7 @@ static TraverseAction dumpCursor(ref<Node> n, address data) {
 	printf("Source: %s\n", *sp);
 	printf("      : ");
 	int column = 0;
-	for (int i = 0; i < n.location().offset; i++) {
+	for (int i = 0; i < n.location(); i++) {
 		if (*sp != null && (*sp)[i] == '\t') {
 			int next = (column + 8) & ~7;
 			printf("%*c", next - column, ' ');

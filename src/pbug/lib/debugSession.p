@@ -21,7 +21,7 @@ import parasol:thread;
 import parasol:types.Set;
 
 public Session session;
-public debug.Tracer controller;
+public debug.Tracer tracer;
 	
 public interface Notifier {
 	void exit(int pid, int exitStatus);

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+PARASOL_BIN=$(dirname "`readlink -f \"$0\"`")/..
+export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
+
+grep "$@" $PARASOL_HOME/runtime/*.p $PARASOL_HOME/src/*/*.p $PARASOL_HOME/src/*/lib/*.p $PARASOL_HOME/src/*/*.h $PARASOL_HOME/src/*/*.cc

@@ -531,7 +531,7 @@ public class ThreadInfo {
 	}
 
 	public void fetchExitCalledInfo() {
-		(_exitCode, _stopSig) = controller.getExitInformation(_tid);
+		(_exitCode, _stopSig) = tracer.getExitInformation(_tid);
 		logger.info("   process %d exit called status %d termination signal %d", _process.id(), _exitCode, _stopSig);
 	}
 
@@ -572,7 +572,7 @@ public class ThreadInfo {
 	public boolean run() {
 		if (_state == ProcessState.STOPPED ||
 			_state == ProcessState.EXIT_CALLED) {
-			if (controller.resume(_tid, _stopSig)) {
+			if (tracer.resume(_tid, _stopSig)) {
 				_state = ProcessState.RUNNING;
 				_stale = true;
 				_process._stale = true;
@@ -672,7 +672,7 @@ public class ThreadInfo {
 	}
 
 	public void refresh() {
-		if (controller.fetchRegisters(_tid, &_registers))
+		if (tracer.fetchRegisters(_tid, &_registers))
 			_stale = false;
 		else
 			printf("ERROR: Attempt to print registers %s failed\n", label());
@@ -770,7 +770,7 @@ class HardFault extends SessionWorkItem {
 
 		linux.siginfo_t sig;
 		boolean success;
-		(sig, success) = controller.getSigInfo(_thread.tid());
+		(sig, success) = tracer.getSigInfo(_thread.tid());
 		if (!success)
 			logger.error("Attempt to obtain sig info for thread %d failed", _thread.tid());
 		actions.onProcessStopped(p, &m);
@@ -799,7 +799,7 @@ class InitialStop extends SessionWorkItem {
 			// This is a one-time call to (on Linux) set options and otherwise initialize the debugging
 			// environment. There would probably also be some reasonable symbols to look up as they might be
 			// smart candidates for implicit breakpoints.
-			controller.setDebugOptions(_thread.process().id(), 
+			tracer.setDebugOptions(_thread.process().id(), 
 							   linux.PTRACE_O_TRACESYSGOOD|
 							   linux.PTRACE_O_TRACEEXEC|
 							   linux.PTRACE_O_TRACEEXIT|
@@ -821,10 +821,10 @@ class NewThread extends SessionWorkItem {
 	}
 
 	void run() {
-		tid := controller.getNewThread(_reportingTid);
+		tid := tracer.getNewThread(_reportingTid);
 		if (tid > 0) {
 			_child.addThread(tid);
-			controller.resume(_reportingTid, 0);
+			tracer.resume(_reportingTid, 0);
 		}
 	}
 }
@@ -839,7 +839,7 @@ class Syscall extends SessionWorkItem {
 	void run() {
 		linux.user_regs_struct urs;
 
-		if (!controller.fetchRegisters(_thread.tid(), &urs)) {
+		if (!tracer.fetchRegisters(_thread.tid(), &urs)) {
 			logger.error("Couldn't fetch registers for %s", _thread.label());
 			return;
 		}
@@ -855,7 +855,7 @@ class InitialExec extends SessionWorkItem {
 	}
 
 	void run() {
-		controller.runToSyscall(_child.id(), 0);
+		tracer.runToSyscall(_child.id(), 0);
 	}
 }
 

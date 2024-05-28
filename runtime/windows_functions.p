@@ -49,6 +49,8 @@ public class BCRYPT_ALG_HANDLE = address;
 public class ULONG = unsigned;
 public class NTSTATUS = int;
 
+@Windows("kernel32.dll", "GetCommandLineA")
+public abstract pointer<byte> GetCommandLine();
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
 @Windows("kernel32.dll", "GetModuleHandleA")

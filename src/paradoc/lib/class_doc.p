@@ -17,6 +17,7 @@ namespace parasol:paradoc;
 
 import parasol:compiler;
 import parasol:process;
+import parasol:runtime;
 import parasol:storage;
 
 class ClassPage extends Page {
@@ -91,7 +92,7 @@ class ClassPage extends Page {
 			classPage.printf("<table class=template-params>\n");
 			classPage.printf("<tr>\n");
 			classPage.printf("<td>%sClass&nbsp;%s&lt;</td>\n<td>", t.isConcrete(null) ? "" : "Abstract&nbsp;", _symbol.name());
-			ref<compiler.ParameterScope> p = ref<compiler.ParameterScope>(scope);
+			p := ref<compiler.ParameterScope>(scope.enclosing());
 			assert(t.class == compiler.TemplateType);
 			ref<ref<compiler.Symbol>[]> params = p.parameters();
 			string[string] paramMap;
@@ -111,6 +112,8 @@ class ClassPage extends Page {
 				string pname = param.name();
 				if (param.type() == null)
 					classPage.printf("&lt;null&gt;&nbsp;%s", pname);
+				else if (param.type().family() == runtime.TypeFamily.CLASS_DEFERRED)
+					classPage.printf("class&nbsp;%s", pname);
 				else
 					classPage.printf("%s&nbsp;%s", typeString(param.type(), targetPath()), pname);
 				if (i < params.length() - 1)

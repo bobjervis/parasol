@@ -20,7 +20,7 @@ import parasol:runtime;
 public class Unary extends Node {
 	private ref<Node> _operand;
 
-	Unary(Operator op, ref<Node> operand, runtime.SourceOffset location) {
+	Unary(Operator op, ref<Node> operand, SourceOffset location) {
 		super(op, location);
 		_operand = operand;
 	}

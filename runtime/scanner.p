@@ -180,8 +180,8 @@ class FileScanner extends Scanner {
 			return -1;
 	}
 
-	public void seek(runtime.SourceOffset location) {
-		_file.seek(location.offset, storage.Seek.START);
+	public void seek(SourceOffset location) {
+		_file.seek(location, storage.Seek.START);
 		super.seek(location);
 	}
 
@@ -211,8 +211,8 @@ public class StringScanner extends Scanner {
 			return -1;
 	}
 
-	public void seek(runtime.SourceOffset location) {
-		_cursor = location.offset;
+	public void seek(SourceOffset location) {
+		_cursor = location;
 		super.seek(location);
 	}
 }
@@ -227,7 +227,7 @@ public class Scanner {
 	/*
 	 * Location of the last token read.
 	 */
-	private runtime.SourceOffset _location;
+	private SourceOffset _location;
 	/*
 	 * _lastChar is the last Unicode code point value returned by getc
 	 */
@@ -350,7 +350,7 @@ public class Scanner {
 				return Token.ERROR;
 
 			case	' ':
-				runtime.SourceOffset spLoc = _location;
+				SourceOffset spLoc = _location;
 				_location = cursor();
 				c = getc();
 				if (c == '<') {
@@ -532,7 +532,7 @@ public class Scanner {
 					continue;
 				} else if (c == '*') {
 					if (_paradoc) {
-						runtime.SourceOffset location = cursor();
+						SourceOffset location = cursor();
 						c = getc();
 						if (c == '*') {
 							c = getc();
@@ -989,7 +989,7 @@ public class Scanner {
 		}
 	}
 
-	private boolean parseDoclet(runtime.SourceOffset location) {
+	private boolean parseDoclet(SourceOffset location) {
 		delete _doclet;
 		_doclet = new Doclet();
 		_doclet.unit = _file;
@@ -1001,7 +1001,7 @@ public class Scanner {
 		boolean inineTag;
 		text.StringWriter sw(&_doclet.text);
 		text.UTF8Encoder encoder(&sw);
-		runtime.SourceOffset tagLocation;
+		SourceOffset tagLocation;
 		_doclet.location = location;
 		int c = getc();
 		while (c == ' ' || c == '\t') {
@@ -1125,7 +1125,7 @@ public class Scanner {
 					encoder.encode('{');
 					encoder.encode(c);
 					if (c == 'l' || c == 'd') {
-						encoder.encode(string(tagLocation.offset));
+						encoder.encode(string(tagLocation));
 						encoder.encode(';');
 					}
 					for (;;) {
@@ -1296,11 +1296,11 @@ public class Scanner {
 		return d;
 	}
 
-	public void seek(runtime.SourceOffset location) {
+	public void seek(SourceOffset location) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
 		_lastChar = 0;
-		_cursor = location.offset;
+		_cursor = location;
 	}
 
 	public void pushBack(Token t) {
@@ -1315,11 +1315,7 @@ public class Scanner {
 		return _value;
 	}
 	
-	public int byteLocation() {
-		return _location.offset;
-	}
-
-	public runtime.SourceOffset location() { 
+	public SourceOffset location() { 
 		return _location; 
 	}
 	/*
@@ -1378,8 +1374,8 @@ public class Scanner {
 	 * This function returns the current 'cursor' location of the
 	 * Scanner.  This value is the offset of the next byte to be read
 	 */
-	public runtime.SourceOffset cursor() {
-		return runtime.SourceOffset(_cursor);
+	public SourceOffset cursor() {
+		return SourceOffset(_cursor);
 	}
 
 	int getMoreBytes(int valueSoFar, int extraBytes) {
@@ -1527,7 +1523,7 @@ public class Doclet {
 	/**
 	 * The offset in the unit of the Doclet
 	 */
-	public runtime.SourceOffset location;
+	public SourceOffset location;
 }
 
 Token[string] keywords = [

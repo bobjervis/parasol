@@ -16,6 +16,7 @@
 namespace parasollanguage.org:cli;
 
 import parasol:log;
+import parasol:net;
 import parasol:process;
 import parasol:pbuild.Application;
 import parasol:pbuild.Coordinator;
@@ -35,6 +36,43 @@ int PROC_STAT_COLUMNS		= 44;	// expected number of columns of data to be reporte
 									// /proc/<pid>/task/<tid>/stat
 
 Notifier notifier;
+
+public int run(ref<debug.PBugOptions> options, string exePath, string... arguments) {
+	cmdLine := process.getCommandLine();
+	if (cmdLine.length() < 2) {
+		printf("Command line incomplete\n");
+		return 1;
+	}
+	if (!cmdLine[1].endsWith(".pxi")) {
+		printf("First argument expected to name a .pxi file\n");
+		return 1;
+	}
+	socket := net.Socket.create();
+	if (socket == null) {
+		printf("Couldn't create a socket");
+		return 1;
+	}
+	// We're all set to spawn the 'manager' process.
+	manager := new process.Process();
+	string[] manArgs;
+	manArgs.append(cmdLine[1]);
+	manArgs.append("-m");
+	if (!socket.bind(0, net.ServerScope.LOCALHOST)) {
+		printf("Could not bind the test manager port\n");
+		return 1;
+	}
+	managerPort := socket.port();
+	manArgs.append(string(managerPort));
+	socket.close();
+	delete socket;
+	manArgs.append(options.copiedOptions());
+	if (!manager.spawn(cmdLine[0], manArgs)) {
+		printf("Spawn of manager sub-process failed\n");
+		return 1;
+	}
+	printf("Console UI not implemented.\n");
+	return 1;
+}
 
 public void consoleUI() {
 	debug.session.listen(notifier);

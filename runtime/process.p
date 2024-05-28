@@ -24,6 +24,7 @@ import parasol:log;
 import parasol:pxi;
 import parasol:runtime;
 import parasol:storage;
+import parasol:stream;
 import parasol:time;
 import parasol:memory;
 import parasol:thread;
@@ -89,6 +90,52 @@ public string binaryFilename() {
 	filename.resize(length);
 	string s(filename);
 	return s;
+}
+/**
+ * Get the command line used to start this program.
+ *
+ * The first argument in this list is the binary pxi loader used to start the program.
+ *
+ * The second argument is the pxi file being run. 
+ * When running a Parasol script file as a simple program, the pxi is the binary of the pc
+ * command.
+ * Otherwise, this will have some general form of <program-name>/application.pxi. Where <program-name>
+ * is some directory readable by the user.
+ * This directory is either the application directory created by pbuild or a copy of it.
+ * 
+ * Note that when invoked as a script, any parameters passed to the pc command will appear, then
+ * the script file name.
+ * Only the arguments that appear after the script file name are passed to the script's main function (if
+ * any).
+ *
+ * @return A set of strings, one string per argument.
+ */
+public string[] getCommandLine() {
+	string[] results;
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		cmdLine := string(windows.GetCommandLine());
+		// Need to research text returned when a quoted argument is passed (is that even legal?)
+		results := cmdLine.split(' ');
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		reader := storage.openTextFile("/proc/self/cmdline");
+		if (reader != null) {
+			string partial;
+			for (;;) {
+				c := reader.read();
+				if (c == stream.EOF)
+					break;
+				if (c == 0) {
+					results.append(partial);
+					partial = null;
+				} else
+					partial.append(byte(c));
+			}
+			if (partial != null)
+				results.append(partial);
+			delete reader;
+		}
+	}
+	return results;
 }
 /**
  * The set of possible process execution outcomes.
