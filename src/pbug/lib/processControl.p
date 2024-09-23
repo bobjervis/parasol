@@ -15,6 +15,8 @@
  */
 namespace parasollanguage.org:debug.manager;
 
+import parasol:time;
+
 public string PROCESS_CONTROL_PROTOCOL = "ProcessControl";
 /**
  * These are the notifications sent to a manager describing state changes
@@ -22,7 +24,33 @@ public string PROCESS_CONTROL_PROTOCOL = "ProcessControl";
  * the controller uses to coordinate with the manager.
  */
 public interface ProcessNotifications {
+	/**
+	 * Tell the manager that all processes being debugged have exited and
+	 * can provide no more information.
+	 *
+	 * This will be followed by a close of the Web Socket.
+	 */
+	void shutdown();
 
+	void processSpawned(time.Instant timestamp, int pid, string label);
+
+	void exit(time.Instant timestamp, int pid, int exitStatus);
+
+	void initialStop(time.Instant timestamp, int pid);
+
+	void initialTrap(time.Instant timestamp, int pid);
+
+	void stopped(time.Instant timestamp, int pid, int tid, int stopSig);
+
+	void exec(time.Instant timestamp, int pid);
+
+	void afterExec(time.Instant timestamp, int pid);
+
+	void exitCalled(time.Instant timestamp, int pid);
+
+	void killed(time.Instant timestamp, int pid, int killSig);
+
+	void newThread(time.Instant timestamp, int pid, int tid);
 }
 /**
  * These are the commands the manager send to the controller to intervene
@@ -30,4 +58,9 @@ public interface ProcessNotifications {
  * queries about the state of the process and it's memory.
  */
 public interface ProcessCommands {
+	/**
+	 * Direct the controller to terminate any active debug processes and shut
+	 * down.
+	 */
+	void shutdown(time.Duration timeout);
 }

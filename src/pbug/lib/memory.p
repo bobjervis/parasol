@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasollanguage.org:debug;
+namespace parasollanguage.org:debug.controller;
 
 import parasol:log;
 import parasol:memory;
@@ -24,6 +24,8 @@ import parasol:text;
 
 import native:linux;
 import native:linux.elf;
+
+import parasollanguage.org:debug.manager;
 
 public class MemoryMap {
 	ref<TracedProcess> _process;
@@ -334,7 +336,7 @@ public class MemoryMap {
 
 	public void print() {
 		st := _process.state();
-		isStopped := st == ProcessState.STOPPED || st == ProcessState.EXIT_CALLED;
+		isStopped := st == manager.ProcessState.STOPPED || st == manager.ProcessState.EXIT_CALLED;
 		printf("Memory for process %d state %s\n", _process.id(), string(st));
 		long prev_end = 0;
 

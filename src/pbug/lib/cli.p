@@ -13,8 +13,84 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * The pbug command-line UI os desogned to run in the xterm window using mouse and 
+ * keyboard controls.
+ * It is one of the sub-commands that can be launched using the pbug application.
+ * The idea is that a manager process serves as the focal point of a debug session,
+ * with controller processes managing a set of one or more debugee processes on a single
+ * machine. There also may be multiple UI processes attached to the same manager.
+ *
+ * Thie command-line UI is intended to provide basic access to the debugging resources
+ * of Parasol, while permitting anyone to develop their own more sophisticated UI.
+ *
+ * UI Layout
+ *
+ * Several pieces of information are essential to conduct a productive debugging session.
+ *
+ *<ul>
+ * <li> You must know where in the source code the current sttae of execution has gotten
+ *      to.
+ * <li> You must know the call stack that got you here.
+ * <li> You must be able to find the data values that are relevant to what you are looking at.
+ * <li> You must be able to see the console output of the program.
+ *</ul>
+ *
+ * IDE's have rightfully devoted most of the display space to program source. A debugger
+ * should probably strive to keep the design focus there as well.
+ *
+ * The basic model is to think about the the terimnal window being divided into panels by
+ * a set of splits. Starting with the outer-most perimeter of the terimnal os one panel, a
+ * horizontal or vertical divider is added to each panel until the final goemetry is arrived at.
+ *
+ * It seems tradiitonal now to talk in terms of the way that IDE's usually divide their
+ * primary window. There is normally a horizontal split in the lower portion of the main
+ * panel. Below it is a display area for different functions such as multi-file search,
+ * debugging, build errors, etc. The area above the main split is further divided by a
+ * vertical split a little to the left of center. To the right of the vertical split is a
+ * text editor window showing source code or other text data files. The left will usually
+ * contain some sort of project or directory outline.
+ *
+ * Many if not all of these dividers can be moved back and forth as the user desires to
+ * customize the appearance.
+ *
+ * The contents of each panel consist of a @{link Scroll}. In it's most simple form, it is a
+ * vector of strings. Each element of the vector is displayed as a line of text. When
+ * a particular scroll is posted to a panel, scroll bars will be included if the panel
+ * is too small to display all of the text.
+ *
+ * Augmenting that text is a vector of spans. Each span lists the beginning and the end
+ * of that span. Spans may overlap. Spans provide attribute information about how the
+ * span will be displayed in the panel.
+ *
+ * Several sub-classes of {@link Scroll} exist:
+ *
+ *<ul>
+ *	<li>Static text. This is the simplest implementation. All of the text is added
+ *		when the Scroll is created and is not modified.
+ *	<li>Event Log. This implements a sequence of lines that can be added to, but not
+ *		modified.
+ *	<li>Form. This defines a form with labels and data entry fields. Spans define
+ *		input behavior, i.e. type-in fields, buttons, drop-downs, etc.
+ *	<li>Source Text. Derived from static text, this adds spans to express color-highlighting.
+ *</ul>
+ *
+ * There are a set of standard commands that a user expects to be able to issue:
+ *<ul>
+ *	<li> Rerun the debugger from the beginning
+ *	<li> Stop the debugging session
+ *	<li> Pause program execution
+ *	<li> Resume program execution
+ *	<li> Step over (execute one source statement, and executae the entirety of any system call
+ *		 in that statement)
+ *	<li> Step into (execute one source statement, and stop at the beginning of any function called
+ *       by the statement)
+ *	<li> Step out of (execute until the current function returns and stop at the return address)
+ *</ul>
+ */
 namespace parasollanguage.org:cli;
 
+import parasol:http;
 import parasol:log;
 import parasol:net;
 import parasol:process;
@@ -22,12 +98,17 @@ import parasol:pbuild.Application;
 import parasol:pbuild.Coordinator;
 import parasol:pbuild.thisOS;
 import parasol:pbuild.thisCPU;
+import parasol:rpc;
 import parasol:runtime;
 import parasol:storage;
+import parasol:thread;
+import parasol:time;
 
+import native:C;
 import native:linux;
 
 import parasollanguage.org:debug;
+import parasollanguage.org:debug.manager;
 
 logger := log.getLogger("pbug.cli");
 
@@ -35,7 +116,10 @@ logger := log.getLogger("pbug.cli");
 int PROC_STAT_COLUMNS		= 44;	// expected number of columns of data to be reported from /proc/<pid>/stat or 
 									// /proc/<pid>/task/<tid>/stat
 
-Notifier notifier;
+//Notifier notifier;
+ref<Terminal> terminal;
+ref<Panel> mainWindow;
+ref<Monitor> cliDone;
 
 public int run(ref<debug.PBugOptions> options, string exePath, string... arguments) {
 	cmdLine := process.getCommandLine();
@@ -47,6 +131,7 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 		printf("First argument expected to name a .pxi file\n");
 		return 1;
 	}
+	cliDone = new Monitor();
 	socket := net.Socket.create();
 	if (socket == null) {
 		printf("Couldn't create a socket");
@@ -70,10 +155,152 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 		printf("Spawn of manager sub-process failed\n");
 		return 1;
 	}
-	printf("Console UI not implemented.\n");
-	return 1;
+	thread.sleep(100);
+	url := "ws://" + net.dottedIP(net.hostIPv4()) + ":" + string(managerPort) + "/session";
+	if (!connectToManager(url)) {
+		printf("Cannot connect to manager at %s\n", url);
+		return 1;
+	}
+	
+	terminal = Terminal.initialize(0, 2);		// puts fd 0 and 2 (if they're both connected to a tty) into raw mode.
+	if (terminal == null) {
+		printf("fd 0 and 2 are not both a tty\n");
+		cleanup();
+		return 1;
+	}
+	logger.info("Terminal initialized - configuring ui");
+	C.atexit(resetTerminal);
+
+	setTerminal();
+
+	mainWindow = new Panel(terminal);
+
+	upperTier := mainWindow.top();
+	lowerTier := mainWindow.next();
+	status := mainWindow.next();
+
+	statusLog := new LogScroll(100);
+	status.bind(statusLog);
+
+	directoryOutline := upperTier.left();
+	sourceFile := upperTier.next();
+
+	logger.info("Starting input loop");
+	inputLoop();
+
+	resetTerminal();
+	cleanup();
+	logger.info("Cli returning normally.");
+	return 0;
 }
 
+void cleanup() {
+	session.commands.shutdown(time.Duration.zero);
+	delete session.commands;
+	cliDone.wait();
+}
+
+void inputLoop() {
+	for (;;) {
+		Key key;
+		int c, shifts, button, row, column;
+
+		(key, c) = terminal.getKeystroke();
+		switch (key) {
+		case NOT_A_KEY:
+//			printf("NOT_A_KEY %d - ", c);
+			break;
+
+		case MouseClick:
+		case MouseDoubleClick:
+		case MouseDown:
+		case MouseDrag:
+		case MouseDrop:
+		case MouseReport:
+			shifts = c & 0xff;
+			button = (c >> 8) & 0xff;
+			column = (c >> 16) & 0xff;
+			row = (c >> 24) & 0xff;
+			if (button != 0)
+				printf("%s @(%d,%d) button %d%s%s%s", string(key), row, column, button, (shifts & 1) != 0 ? " shift" : "",
+					(shifts & 2) != 0 ? " alt" : "", (shifts & 4) != 0 ? " ctl" : "");
+			break;
+
+		case MouseMove:
+			column = (c >> 16) & 0xff;
+			row = (c >> 24) & 0xff;
+//			printf("%s @(%d,%d)\r\n", string(key), row, column);
+			break;
+
+		case MouseWheel:
+			logger.info("%s %s", string(key), c > 0 ? "down" : "up");
+			break;
+
+		case CodePoint:
+			logger.info("key = %s c = %x '%c'", string(key), c, c);
+			if (c == 'q')
+				return;
+			break;
+
+		case EOF:
+			logger.info("key = %s c = %x '%c'", string(key), c, c);
+			return;
+
+		default:
+			logger.info("key = %d c = %x", int(key), c);
+		}
+	}
+}
+
+void resetTerminal() {
+	terminal.switchToNormalBuffer();
+	if (!terminal.switchToCooked())
+		printf("Terminal not reset to cooked\r\n");
+	terminal.disableMouseTracking();
+}
+
+void setTerminal() {
+	terminal.switchToAlternateBuffer();
+	if (!terminal.switchToRaw())
+		printf("Terminal not reset to cooked\r\n");
+	terminal.enableMouseTracking();
+}
+
+boolean connectToManager(string url) {
+	rpc.Client<manager.SessionCommands, manager.SessionNotifications> client(url, manager.SESSION_PROTOCOL, session);
+	client.onDisconnect(session);
+	logger.info("Calling connect to manager session");
+	if (client.connect() == http.ConnectStatus.OK) {
+		logger.info("manager session Connected");
+		session.commands = client.proxy();
+		return true;
+	} else {
+		logger.error("manager session not connected");
+		return false;
+	}
+}
+
+Session session;
+
+class Session implements manager.SessionNotifications, http.DisconnectListener {
+	manager.SessionCommands commands;
+
+	void disconnect(boolean normalClose) {
+		logger.debug("SessionNotifications downstream disconnect, normal close? %s", string(normalClose));
+		// Should probably try to reconnect if close is not normal. - Or does the cli include a reconnect command?
+	}
+
+	void afterExec(time.Time at, manager.ProcessInfo info) {
+		logger.format(at, log.INFO, "Process %d (%s) has stopped after a system exec call.", info.pid, info.label);
+	}
+
+	void shutdown() {
+		logger.info("Manager notification of shutdown");
+		cliDone.notify();
+	}
+}
+
+/*
 public void consoleUI() {
 	debug.session.listen(notifier);
 	// Is the process connected up to a terminal?
@@ -543,4 +770,4 @@ class File extends debug.SessionWorkItem {
 		_child.showFileMemory(_pattern);
 	}
 }	
-
+*/

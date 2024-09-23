@@ -96,6 +96,7 @@ import parasol:exception;
 import parasol:log;
 import parasol:process;
 import parasol:storage;
+import parasol:time;
 import native:linux;
 import native:C;
 
@@ -188,6 +189,21 @@ public class Process extends process.Process {
 		}
 		return true;
 	}
+
+	public boolean terminate() {
+		result := linux.kill(id(), linux.SIGTERM);
+		if (result == -1) {
+			err := linux.errno();
+			if (err == linux.EPERM ||
+				err == linux.ESRCH) {
+				logger.error("trying to kill pid %d: %s", id(), linux.strerror(err));
+				return false;
+			} else
+				throw exception.IllegalOperationException("Trying to terminate child process " + id() + " produced an unexpected error " +
+																err + " (" + linux.strerror(err) +")");
+		}
+		return true;
+	}
 }
 
 /**
@@ -220,16 +236,17 @@ public class Process extends process.Process {
  *
  * @exception IllegalOperationException thrown if the call produced an unexpected error condition.
  */
-public int, DebugEvent, int eventWait() {
+public int, DebugEvent, int, time.Instant eventWait() {
 	int status;
 	int ptraceEvent;
 
 	for (;;) {
 		pid := linux.waitpid(-1, &status, linux.__WALL);
+		now := time.Instant.now();
 		if (pid == -1) {
 			err := linux.errno();
 			if (err == linux.EINTR)
-				return -1, DebugEvent.INTERRUPTED, 0;
+				return -1, DebugEvent.INTERRUPTED, 0, now;
 			else if (err == linux.ECHILD)
 				throw exception.IllegalOperationException("No child process to wait for");
 			else if (err == linux.EINVAL)
@@ -241,30 +258,30 @@ public int, DebugEvent, int eventWait() {
 																err + " (" + linux.strerror(err) +")");
 		}
 		if (linux.WIFEXITED(status))
-			return pid, DebugEvent.EXIT, linux.WEXITSTATUS(status);
+			return pid, DebugEvent.EXIT, linux.WEXITSTATUS(status), now;
 		else if (linux.WIFSIGNALED(status))
-			return pid, DebugEvent.KILLED, linux.WTERMSIG(status);
+			return pid, DebugEvent.KILLED, linux.WTERMSIG(status), now;
 		else if (linux.WIFSTOPPED(status)) {
 			int signal = linux.WSTOPSIG(status);
 			ptraceEvent = status >>> 16;
 			switch (ptraceEvent) {
 			case 0:
 				if (signal == (0x80 | linux.SIGTRAP))
-					return pid, DebugEvent.SYSCALL, signal;
+					return pid, DebugEvent.SYSCALL, signal, now;
 				break;
 
 			case linux.PTRACE_EVENT_CLONE:
-				return pid, DebugEvent.NEW_THREAD, signal;
+				return pid, DebugEvent.NEW_THREAD, signal, now;
 
 			case linux.PTRACE_EVENT_EXEC:
-				return pid, DebugEvent.EXEC, signal;
+				return pid, DebugEvent.EXEC, signal, now;
 
 			case linux.PTRACE_EVENT_EXIT:
-				return pid, DebugEvent.EXIT_CALLED, signal;
+				return pid, DebugEvent.EXIT_CALLED, signal, now;
 			}
-			return pid, DebugEvent.STOPPED, signal;
+			return pid, DebugEvent.STOPPED, signal, now;
 		} else
-			return pid, DebugEvent.UNEXPECTED, status;
+			return pid, DebugEvent.UNEXPECTED, status, now;
 	}
 }
 

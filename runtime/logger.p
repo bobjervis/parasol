@@ -282,7 +282,7 @@ public monitor class Logger {
 		return oldLevel, oldHandler, oldEcho;
 	}
 	/**
-	 * Print a formatted messages with importance {@link INFO}.
+	 * Print a formatted message with importance {@link INFO}.
 	 *
 	 * Calling this method is equivalent to:
 	 *
@@ -406,6 +406,15 @@ public monitor class Logger {
 		if (needToCheck(level))
 			queueEvent(runtime.returnAddress(), level, msg);
 	}
+
+	public void log(time.Time at, int level, string msg) {
+		if (level < -5 || level > 5 || level == 0)
+			throw IllegalArgumentException(string(level));
+		if (msg == null)
+			return;
+		if (needToCheck(level))
+			queueEvent(at, runtime.returnAddress(), level, msg);
+	}
 	/**
 	 * Print a formatted string with the given importance
 	 *
@@ -433,6 +442,17 @@ public monitor class Logger {
 
 			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), level, msg);
+		}
+	}
+
+	public void format(time.Time at, int level, string format, var... arguments) {
+		if (level < -5 || level > 5 || level == 0)
+			throw IllegalArgumentException(string(level));
+		if (needToCheck(level)) {
+			string msg;
+
+			msg.printf(format, arguments);
+			queueEvent(at, runtime.returnAddress(), level, msg);
 		}
 	}
 	/**
@@ -527,7 +547,6 @@ public monitor class Logger {
 	 * Note: returnAddress is not yet implemented.
 	 */
 	private void queueEvent(address returnAddress, int level, string msg) {
-		// All log messages go through here. Level has been confirmed as high enough to care about.
 		LogEvent logEvent = {
 			when: time.Time.now(), 
 			level: level, 
@@ -536,12 +555,29 @@ public monitor class Logger {
 			threadId: thread.currentThread().id(),	// The thread may disappear before we write the message,
 													// so remember the thread id, not the Thread object.
 		};
+		queueEvent(&logEvent);
+	}
+
+	private void queueEvent(time.Time at, address returnAddress, int level, string msg) {
+		LogEvent logEvent = {
+			when: at, 
+			level: level, 
+			msg: msg, 
+			returnAddress: returnAddress,
+			threadId: thread.currentThread().id(),	// The thread may disappear before we write the message,
+													// so remember the thread id, not the Thread object.
+		};
+		queueEvent(&logEvent);
+	}
+
+	private void queueEvent(ref<LogEvent> logEvent) {
+		// All log messages go through here. Level has been confirmed as high enough to care about.
 
 		ref<Logger> context = this;
 		do {
 			lock (*context) {
 				if (_destination != null)
-					_destination.enqueue(&logEvent);
+					_destination.enqueue(logEvent);
 				if (_propagateEvents)
 					context = _parent;
 				else

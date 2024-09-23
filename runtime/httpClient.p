@@ -870,6 +870,8 @@ public class Client {
 			encryption = net.Encryption.NONE;
 		}
 
+		if (_cipherList == null)
+			_cipherList = "HIGH:"; //"DEFAULT:-DHE-RSA-DES-CBC3-SHA:-DES-CBC3-SHA";
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, null, null, null);
 		if (socket == null) {
 			if (_logger != null)

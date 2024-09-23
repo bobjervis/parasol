@@ -20,6 +20,8 @@ import parasol:log;
 import parasol:net;
 import parasol:process;
 import parasol:rpc;
+import parasol:time;
+
 import parasollanguage.org:debug;
 
 private ref<log.Logger> logger = log.getLogger("pbug.manager");
@@ -80,20 +82,23 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 		return 1;
 	}
 	printf("Manager port %d\n", options.managerOption.value);
-	server := new http.Server();
-	server.disableHttp();
-	server.setHttpsPort(char(options.managerOption.value));
+	server = new http.Server();
+	server.disableHttps();
+	server.setHttpPort(char(options.managerOption.value));
 	processControl.webSocketProtocol(PROCESS_CONTROL_PROTOCOL, new ProcessControlFactory());
-	session.webSocketProtocol("Session", new SessionFactory());
-	server.httpsService("/proc/control", &processControl);
-	server.httpsService("/session", &session);
+	session.webSocketProtocol(SESSION_PROTOCOL, new SessionFactory());
+	server.httpService("/proc/control", &processControl);
+	server.httpService("/session", &session);
 	server.start(net.ServerScope.INTERNET);
 	server.wait();
+	logger.info("Manager returning normally.");
 	return 0;
 }
 
 http.WebSocketService processControl;
 http.WebSocketService session;
+ref<http.Server> server;
+
 
 SessionState sessionState;
 
@@ -103,41 +108,124 @@ class ProcessControlFactory extends rpc.WebSocketFactory<ProcessNotifications, P
 		ref<ProcessControl> s = new ProcessControl(socket);
 		socket.setObject(s);
 		socket.onDisconnect(s);
-		return true;
+		return managedState.registerController(s);
 	}
 }
 
 class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 	ref<rpc.WebSocket<ProcessNotifications, ProcessCommands>> socket;
+	ProcessCommands commands;
 
 	ProcessControl(ref<rpc.WebSocket<ProcessNotifications, ProcessCommands>> socket) {
 		this.socket = socket;
+		this.commands = socket.proxy();
 	}
 
 	void disconnect(boolean normalClose) {
-		logger.debug("ProcessControl upstream disconnect, normal close? %s", string(normalClose));
+		logger.debug("ProcessNotifications upstream disconnect, normal close? %s", string(normalClose));
+		managedState.unregisterController(this);
+	}
+	/**
+	 * Notify manager of controller shutdown.
+	 */
+	void shutdown() {
+//		managedState.unregisterController(this);
+	}
+
+	void processSpawned(time.Instant timestamp, int pid, string label) {
+		logger.info("=== ProcessControl === Process %d '%s' spawned", pid, label);
+		managedState.processSpawned(this, pid, label);
+	}
+
+	void exit(time.Instant timestamp, int pid, int exitStatus) {
+		logger.info("=== ProcessControl === Process %d exited %d", pid, exitStatus);
+	}
+
+	void initialStop(time.Instant timestamp, int pid) {
+		logger.info("=== ProcessControl === Process %d initial stop", pid);
+	}
+
+	void initialTrap(time.Instant timestamp, int pid) {
+		logger.info("=== ProcessControl === Process %d initial trap", pid);
+	}
+
+	void stopped(time.Instant timestamp, int pid, int tid, int stopSig) {
+		logger.info("=== ProcessControl === Process %d thread %d stopped %d", pid, tid, stopSig);
+	}
+
+	void exec(time.Instant timestamp, int pid) {
+		logger.info("=== ProcessControl === Process %d exec", pid);
+	}
+
+	void afterExec(time.Instant timestamp, int pid) {
+		logger.info("=== ProcessControl === Process %d after exec", pid);
+		managedState.afterExec(this, timestamp, pid);
+	}
+
+	void exitCalled(time.Instant timestamp, int pid) {
+		logger.info("=== ProcessControl === Process %d exit called", pid);
+	}
+
+	void killed(time.Instant timestamp, int pid, int killSig) {
+		logger.info("=== ProcessControl === Process %d killed %d", pid, killSig);
+	}
+
+	void newThread(time.Instant timestamp, int pid, int tid) {
+		logger.info("=== ProcessControl === Process %d new thread %d", pid, tid);
 	}
 }
 
-class SessionFactory extends rpc.WebSocketFactory<SessionNotifications, SessionCommands> {
+class SessionFactory extends rpc.WebSocketFactory<SessionCommands, SessionNotifications> {
 	public boolean notifyCreation(ref<http.Request> request, 
-								  ref<rpc.WebSocket<SessionNotifications, SessionCommands>> socket) {
+								  ref<rpc.WebSocket<SessionCommands, SessionNotifications>> socket) {
 		ref<Session> s = new Session(socket);
+		if (!managedState.registerSession(s)) {
+			delete s;
+			return false;
+		}
 		socket.setObject(s);
 		socket.onDisconnect(s);
 		return true;
 	}
 }
 
-class Session implements SessionNotifications, http.DisconnectListener {
-	ref<rpc.WebSocket<SessionNotifications, SessionCommands>> socket;
+class Session implements SessionCommands, http.DisconnectListener {
+	ref<rpc.WebSocket<SessionCommands, SessionNotifications>> socket;
+	SessionNotifications notifications;
 
-	Session(ref<rpc.WebSocket<SessionNotifications, SessionCommands>> socket) {
+	Session(ref<rpc.WebSocket<SessionCommands, SessionNotifications>> socket) {
 		this.socket = socket;
+		this.notifications = socket.proxy();
 	}
 
 	void disconnect(boolean normalClose) {
-		logger.debug("upstream disconnect, normal close? %s", string(normalClose));
+		logger.debug("SessionCommands upstream disconnect, normal close? %s", string(normalClose));
+	}
+
+	boolean shutdown(time.Duration timeout) {
+		controllers := managedState.shutdown();
+		logger.info("shutdown called with %d,%d and %d controllers", timeout.seconds(), timeout.nanoseconds(), controllers.length());
+		for (i in controllers) {
+			controller := controllers[i];
+			controller.commands.shutdown(timeout);
+		}
+		result := managedState.waitForShutdown();
+		logger.info("manager waited for shutdown %s", result);
+		if (result)
+			server.stop();
+		return result;
+	}
+
+	ManagerInfo getManagerInfo() {
+		return managedState.getInfo();
+	}
+
+	ProcessInfo[] getProcesses() {
+		return managedState.getProcesses();
+	}
+
+	LogInfo[] getLogs(int min, int max) {
+		return managedState.getLogs(min, max);
 	}
 }
 

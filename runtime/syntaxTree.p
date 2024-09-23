@@ -1165,6 +1165,10 @@ public class ClassDeclarator extends Block {
 	private void assignTypes(ref<CompileContext> compileContext) {
 		if (op() == Operator.ENUM) {
 			type = ref<EnumScope>(scope).enumType;
+			if (type == null) {
+				type = compileContext.errorType();
+				return;
+			}
 			if (type.hasConstructors())
 				assignEnumConstructors(type, _extends, compileContext);
 		} else {

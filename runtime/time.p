@@ -257,7 +257,7 @@ public class Time {
 	 * @param d The Duration to add to this time.
 	 */
 	public Time plus(Duration d) {
-		long millis = d.seconds() / MILLIS_PER_SECOND + d.nanoseconds() * NANOS_PER_MILLI;
+		long millis = d.seconds() * MILLIS_PER_SECOND + d.nanoseconds() / NANOS_PER_MILLI;
 		return Time(_value + millis);
 	}
 	/**
@@ -266,7 +266,7 @@ public class Time {
 	 * @param d The Duration to subtract from this time.
 	 */
 	public Time minus(Duration d) {
-		long millis = d.seconds() / MILLIS_PER_SECOND + d.nanoseconds() * NANOS_PER_MILLI;
+		long millis = d.seconds() * MILLIS_PER_SECOND + d.nanoseconds() / NANOS_PER_MILLI;
 		return Time(_value + millis);
 	}
 }
@@ -276,6 +276,14 @@ public class Time {
  * Durations have a distinct value, {@link Duration.infinite}, that represents
  * an infinite amount of time. Waiting an infinite amount of time, for example,
  * is equivalent to waiting with no timeout.
+ *
+ * Duration arithmetic factors {@link Duration.infinite} in a way that, strictly
+ * speaking, does not conform to infinite quantities in real number arithmetic.
+ * There is no negative infinity. The difference between two actual Instant's is
+ * never {@link Duration.infinite}. Any finite Duration is less than {@link Duration.infinite}.
+ * Subtracting {@link Duration.infinite} from a finite Duration yields 
+ * {@link Duration.infinite}.
+ * The negation of {@link Duration.infinite} is {@link Duration.infinite}.
  */
 public class Duration {
 	long _seconds;
@@ -415,7 +423,7 @@ public class Duration {
 			_nanoseconds %= NANOS_PER_SECOND;
 		}
 	}
-	/*
+	/**
 	 * Implement a partially ordered relation of Time objects so that times can be compared
 	 * correctly.
 	 *
@@ -494,6 +502,18 @@ public class Duration {
 			return 0;
 		else
 			return _nanoseconds;
+	}
+	/**
+	 * A zero-valued duration.
+	 */
+	public static Duration zero;
+	/**
+	 * Test whether a duration is exactly zero.
+	 *
+	 * @return true if the duration has zero seconds and zero nanoseconds, and false otherwise.
+	 */
+	public boolean isZero() {
+		return _seconds == 0 && _nanoseconds == 0;
 	}
 }
 

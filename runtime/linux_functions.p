@@ -55,6 +55,9 @@ class __locale_t {
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
 
+@Linux("libc.so.6", "cfmakeraw")
+public abstract int cfmakeraw(ref<termios> termios_p);
+
 @Linux("libc.so.6", "chdir")
 public abstract int chdir(pointer<byte> path);
 
@@ -173,6 +176,11 @@ public abstract int ioctl(int fd, int cmd);
  */
 @Linux("libc.so.6", "ioctl")
 public abstract int ioctl(int fd, int cmd, int arg);
+/**
+ * Use this variant for cmd = KBGKBMODE
+ */
+@Linux("libc.so.6", "ioctl")
+public abstract int ioctl(int fd, int cmd, address arg);
 
 @Linux("libc.so.6", "isatty")
 public abstract int isatty(int fd);
@@ -722,28 +730,36 @@ public class termios {
     public tcflag_t c_lflag;           /* local mode flags */
     public cc_t c_line;                /* line discipline */
 	// The C struct defines an array of 32 control characters.
-    public cc_t c_cc1;	               /* control characters */
-    public cc_t c_cc2;	               /* control characters */
-    public cc_t c_cc3;	               /* control characters */
-    public cc_t c_cc4;	               /* control characters */
-    public cc_t c_cc5;	               /* control characters */
-    public cc_t c_cc6;	               /* control characters */
-    public cc_t c_cc7;	               /* control characters */
-    public long c_cc08_15;             /* control characters */
-    public long c_cc16_23;             /* control characters */
-    public long c_cc24_31;             /* control characters */
-	public cc_t c_cc32;                /* control characters */
+    public cc_t VINTR;		           /* control characters */
+    public cc_t VQUIT;	               /* control characters */
+    public cc_t VERASE;	               /* control characters */
+    public cc_t VKILL;	               /* control characters */
+    public cc_t VEOF;	               /* control characters */
+    public cc_t VTIME;	               /* control characters */
+    public cc_t VMIN;	               /* control characters */
+    public cc_t VSWTC;	               /* control characters */
+    public cc_t VSTART;	               /* control characters */
+    public cc_t VSTOP;	               /* control characters */
+    public cc_t VSUSP;	               /* control characters */
+    public cc_t VEOL;	               /* control characters */
+    public cc_t VREPRINT;              /* control characters */
+    public cc_t VDISCARD;              /* control characters */
+    public cc_t VWERASE;               /* control characters */
+    public cc_t VLNEXT;	               /* control characters */
+    public cc_t VEOL2;	               /* control characters */
+    public cc_t c_cc18;	               /* control characters */
+    public cc_t c_cc19;	               /* control characters */
     public speed_t c_ispeed;           /* input speed */
     public speed_t c_ospeed;           /* output speed */
 
 	// Use these accessors to manipulate the cc elements.
 	public void set_cc(int i, byte value) {
-		pointer<byte> p = pointer<byte>(&c_cc1);
+		pointer<byte> p = pointer<byte>(&VINTR);
 		p[i] = value;
 	}
 
 	public byte get_cc(int i) {
-		pointer<byte> p = pointer<byte>(&c_cc1);
+		pointer<byte> p = pointer<byte>(&VINTR);
 		return p[i];
 	}
 }
@@ -794,6 +810,27 @@ public unsigned ONLRET = 0000040;
 # define XTABS  0014000
 #endif
 */
+/* c_iflag bits */ 
+@Constant
+public unsigned IXON   = 0002000;
+/* c_lflag bits */
+@Constant
+public unsigned ISIG   = 0000001;
+@Constant
+public unsigned ICANON = 0000002;
+@Constant
+public unsigned ECHO   = 0000010;
+@Constant
+public unsigned IEXTEN = 0100000;
+
+
+@Constant
+public int TCSANOW = 0;
+@Constant
+public int TCSADRAIN = 1;
+@Constant
+public int TCSAFLUSH = 2;
+
 
 public class DIR {
 	private int dummy;			// Don't expose anything about this structure
@@ -2532,7 +2569,10 @@ public int TIOCSCTTY =       0x540E;
 #define TIOCSPGRP       0x5410
 #define TIOCOUTQ        0x5411
 #define TIOCSTI         0x5412
-#define TIOCGWINSZ      0x5413
+*/
+@Constant
+public int TIOCGWINSZ =      0x5413;
+/*
 #define TIOCSWINSZ      0x5414
 #define TIOCMGET        0x5415
 #define TIOCMBIS        0x5416
@@ -2612,4 +2652,12 @@ public int TIOCSCTTY =       0x540E;
 
 #define TIOCSER_TEMT    0x01    /* Transmitter physically empty */
 */
+public class winsize {
+	public char ws_row;
+	public char ws_col;
+	public char ws_xpixels;
+	public char ws_ypixels;
+}
+
+
 

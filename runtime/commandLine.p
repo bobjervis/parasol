@@ -357,14 +357,10 @@ public class Command {
 	}
 
 	public void help() {		// Does not return
-//		CONSOLE_SCREEN_BUFFER_INFO screenBuffer;
+		int rows;
+		int lineLength;
 
-		int lineLength = 80;
-/*
-		if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &screenBuffer)) {
-			lineLength = screenBuffer.dwSize.X - 1;
-		}
- */
+		(rows, lineLength) = runtime.terminalSize();
  		printf("Use is: ");
 		helpDetails(lineLength, 0, 8, 8);
 		exit(1);

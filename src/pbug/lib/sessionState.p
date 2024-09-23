@@ -20,6 +20,7 @@ import parasol:process;
 import parasollanguage.org:debug;
 
 class SessionState {
+
 	boolean debugApplication(ref<debug.PBugOptions> options, string exePath, string... arguments) {
 		cmdLine := process.getCommandLine();
 		if (cmdLine.length() < 2) {
@@ -35,7 +36,7 @@ class SessionState {
 		string[] ctrlrArgs;
 		ctrlrArgs.append(cmdLine[1]);
 		ctrlrArgs.append("-c");
-		ctrlrArgs.append("wss://" + net.dottedIP(net.hostIPv4()) + ":" + string(options.managerOption.value) + "/proc/control");
+		ctrlrArgs.append("ws://" + net.dottedIP(net.hostIPv4()) + ":" + string(options.managerOption.value) + "/proc/control");
 		ctrlrArgs.append(options.copiedOptions());
 		if (!controller.spawn(cmdLine[0], ctrlrArgs)) {
 			printf("Spawn of controller sub-process failed\n");

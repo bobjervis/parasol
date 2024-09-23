@@ -1357,6 +1357,41 @@ private int getCurrentThreadId() {
 	else
 		return -1;
 }
+/**
+ * Timeout
+ *
+ * The basic model of a timeout is that some activity f() is performed while a timer
+ * run in the background.
+ */
+
+public class Timeout<class T> extends Future<T> {
+	boolean _timedOut;
+	ref<Thread> _waiter;
+	time.Duration _timeout;
+
+	Timeout(time.Duration timeout) {
+		_waiter = new Thread();
+		if (timeout.isFinite()) {
+			_timeout = timeout;
+			_waiter.start(checkTimeout, this);
+		}
+	}
+
+	private static void checkTimeout(address arg) {
+		t := ref<Timeout<T>>(arg);
+		lock (*t) {
+			if (wait(_timeout))
+				return;
+			_timedOut = true;
+			postFailure(null);
+		}
+	}
+
+	public boolean timedOut() {
+		return _timedOut;
+	}
+}
+
 
 @Linux("libparasol.so.1", "dupExecutionContext")
 @Windows("parasol.dll", "dupExecutionContext")

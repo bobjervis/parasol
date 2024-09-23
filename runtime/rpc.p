@@ -65,6 +65,7 @@ class WebSocketTransport extends ClientTransport {
 	ref<WebSocketVolatileData> rpcWebSocket;
 
 	~WebSocketTransport() {
+		logger.info("~WebSocketTransport");
 		delete reader;
 		delete socket;
 	}
@@ -340,7 +341,26 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 	public boolean prefilter(ref<http.Request> request, ref<http.Response> response) {
 		return true;
 	}
-
+	/**
+	 * Notify the server of new web socket creation.
+	 *
+ 	 * This method is typically overridden to provide service-specific behavior for this factory.
+	 *
+	 * If the function returns false, there is something wrong with either the request itself
+	 * or the state of the server. For example, once shutdown has begun, and new connections that 
+	 * manage to reach the factory could be rejected, even though the HTTP server is still technically
+	 * accepting connections.
+	 *
+	 * If this function returns false, the socket parameter object will be deleted so it's value should
+	 * not be saved for any purpose.
+	 *
+	 * @param request The HTTP request that is trying to open a web socket.
+	 * @param socket The socket object that will be used to communicate if this method accepts the new
+	 * connection.
+	 *
+	 * @return true if the connection meets requirements and the system is willing to begin a connection,
+	 * false if a connection is refused and the caller should be rejected.
+	 */
 	public boolean notifyCreation(ref<http.Request> request, ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket) {
 		return true;
 	}

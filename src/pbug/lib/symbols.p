@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasollanguage.org:debug;
+namespace parasollanguage.org:debug.symbols;
 
 import parasol:storage;
 import native:linux.elf;

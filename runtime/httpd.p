@@ -442,6 +442,23 @@ public class Server {
 	}
 
 	private ref<Socket> bindSocket(ServerScope scope, char port, Encryption encryption) {
+		if (cipherList == null)
+			cipherList = "HIGH:"; //"DEFAULT:-DHE-RSA-DES-CBC3-SHA:-DES-CBC3-SHA";
+		if (certificatesFile == null) {
+			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
+			if (storage.exists(file))
+				certificatesFile = file;
+		}
+		if (privateKeyFile == null) {
+			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
+			if (storage.exists(file))
+				privateKeyFile = file;
+		}
+		if (dhParamsFile == null) {
+			file := "/usr/parasol/latest/test/certificates/dhparams.pem";
+			if (storage.exists(file))
+				certificatesFile = file;
+		}
 		ref<Socket> socket = Socket.create(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {

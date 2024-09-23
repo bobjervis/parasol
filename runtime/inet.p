@@ -905,23 +905,6 @@ class SSLSocket extends Socket {
 		_certificatesFile = certificatesFile;
 		_privateKeyFile = privateKeyFile;
 		_dhParamsFile = dhParamsFile;
-		if (_cipherList == null)
-			_cipherList = "DEFAULT:-DHE-RSA-DES-CBC3-SHA:-DES-CBC3-SHA";
-		if (_certificatesFile == null) {
-			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
-			if (storage.exists(file))
-				_certificatesFile = file;
-		}
-		if (_privateKeyFile == null) {
-			file := "/usr/parasol/latest/test/certificates/self-signed.pem";
-			if (storage.exists(file))
-				_certificatesFile = file;
-		}
-		if (_dhParamsFile == null) {
-			file := "/usr/parasol/latest/test/certificates/dhparams.pem";
-			if (storage.exists(file))
-				_certificatesFile = file;
-		}
 	}
 
 	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
@@ -989,8 +972,10 @@ class SSLSocket extends Socket {
 						break;
 					logger.debug("    %d %s", e, ssl.ERR_error_string(e, null));
 				}
-			}
-		}
+			} else
+				logger.debug("Cipher list: %s", cipherList);
+		} else
+			logger.warn("No cipher list defined");
 //		logger.debug( "context created for %d", _acceptfd);
 		return context;
 	}
@@ -1041,8 +1026,7 @@ class SSLConnection extends Connection {
 //		logger.debug( "_ssl %p before SSL_accept", _ssl);
 		int r = ssl.SSL_accept(_ssl);
 		if (r == -1) {
-			logger.debug("SSL_accept failed: %d", ssl.SSL_get_error(_ssl, r));
-			logger.debug("                %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
+			logger.debug("SSL_accept failed: %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
@@ -1079,13 +1063,12 @@ class SSLConnection extends Connection {
 //		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_connect(_ssl);
 		if (r < 1) {
-			logger.debug("SSL_connect failed: %d\n", ssl.SSL_get_error(_ssl, r));
-			logger.debug("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
+			logger.debug("SSL_connect failed: %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.debug("    %s\n", ssl.ERR_error_string(e, null));
+				logger.debug("    %s", ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}

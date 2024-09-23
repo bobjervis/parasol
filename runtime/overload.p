@@ -86,7 +86,7 @@ class OverloadOperation {
 			return null;
 		}
 		// The symbol must be an 'Overload' object
-		ref<Overload> o = ref<Overload>(sym);
+		o := ref<Overload>(sym);
 		// If we are seeking a TEMPLATE, then an Overload full of FUNCTION's
 		// are not only uninteresting, they mask any outer potential overloaded
 		// definitions we might otherwise care about.
@@ -96,6 +96,11 @@ class OverloadOperation {
 		}
 		if (_overload == null)
 			_overload = o;
+		if (o.instances().length() > 30) {
+			// Sometimes the instances length is getting corrupted - a bad but almost untraceable bug
+			printf("%s length = %d\n", string(o.name()), o.instances().length());
+			return null;
+		}
 		for (int i = 0; i < o.instances().length(); i++) {
 			ref<OverloadInstance> oi = (*o.instances())[i];
 			_anyPotentialOverloads = true;

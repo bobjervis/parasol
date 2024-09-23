@@ -939,7 +939,8 @@ public class CompileContext extends CodegenContext {
 			} else
 				instanceType = errorType();
 			bindEnums(enumScope, instanceType, c.extendsClause());
-			enumScope.enumType.instanceCount = enumScope.symbols().size();
+			if (enumScope.enumType != null)
+				enumScope.enumType.instanceCount = enumScope.symbols().size();
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	CLASS:

@@ -1014,6 +1014,32 @@ public class VirtualStack {
 	} 
 
 }
+/**
+ * Return the window size in characters
+ *
+ * If this process is running connected with fd 0 to a terminal, this will determine the
+ * terminal window size in characters and return it.
+ *
+ * If this process is not connected with fd 0 to a terminal, this will return -1 as each size. 
+ */
+public int, int terminalSize() {
+	if (compileTarget == Target.X86_64_WIN) {
+//		CONSOLE_SCREEN_BUFFER_INFO screenBuffer;
 
+//		int lineLength = 80;
+/*
+		if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &screenBuffer)) {
+			lineLength = screenBuffer.dwSize.X - 1;
+		}
+ */
+	} else if (compileTarget == Target.X86_64_LNX) {
+		linux.winsize size;
+
+		linux.ioctl(0, linux.TIOCGWINSZ, &size);
+
+		return size.ws_row, size.ws_col;
+	}
+	return -1, -1;
+}
 
 

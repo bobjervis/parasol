@@ -663,6 +663,8 @@ string typeString(ref<compiler.Type> type, string baseName) {
 				s.append(", ");
 			if (sym.type() == null)
 				s.printf("&lt;null&gt; %s", sym.name());
+			else if (sym.type().family() == runtime.TypeFamily.CLASS_DEFERRED)
+				s.printf("class&nbsp;%s", sym.name());
 			else
 				s.printf("%s %s", typeString(sym.type(), baseName), sym.name());
 		}
