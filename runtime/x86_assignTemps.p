@@ -601,8 +601,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			switch (node.type.family()) {
 			case	CLASS:
-				printf("\n>> non pointer type\n");
+				printf("\n>> non pointer type: %s - %s\n", string(node.type.family()), node.type.signature());
 				node.print(4);
+				node.register = byte(R.RAX);
+				break;
 				assert(false);
 			}
 
@@ -852,7 +854,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				node.register = byte(f().r.getreg(node, requiredMask(node), regMask));
 				break;
 			default:
+				printf(">> non-subscriptable type\n");
 				node.print(0);
+				node.register = byte(R.RAX);
+				break;
 				assert(false);
 			}
 			break;
@@ -1327,6 +1332,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	private void assignCallRegisters(ref<Call> call, ref<CompileContext> compileContext) {
 		int i = 0;
 		boolean isConstructor = false;
+
+		if (!call.folded())
+			return;
 		// This will flush out any stray temps at the 'last minute'
 		int depth = tempStackDepth();
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next)

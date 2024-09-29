@@ -1533,9 +1533,12 @@ public class CompileContext extends CodegenContext {
 	public ref<Type> memoryAllocatorType() {
 		if (_memoryAllocator == null) {
 			ref<Symbol> sym = _forest.getSymbol("parasol", "memory.Allocator", this);
-			if (sym.assignType(this).family() != TypeFamily.TYPEDEF)
-				assert(false);
-			_memoryAllocator = ref<TypedefType>(sym.type()).wrappedType();
+			if (sym != null) {
+				if (sym.assignType(this).family() != TypeFamily.TYPEDEF)
+					assert(false);
+				_memoryAllocator = ref<TypedefType>(sym.type()).wrappedType();
+			} else
+				_memoryAllocator = errorType();
 		}
 		return _memoryAllocator;
 	}

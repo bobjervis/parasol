@@ -4469,7 +4469,10 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	TRUE:
 	case	INTEGER:
 	case	IDENTIFIER:
+	case	CHARACTER:
 	case	STRING:
+	case	THIS:
+	case	NULL:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());
 		expression.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 		return expression;
@@ -4478,7 +4481,32 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		ref<Selection> sel = ref<Selection>(expression);
 		return foldVoidContext(sel.left(), tree, compileContext);
 
+	case	LOGICAL_AND:
+		b = ref<Binary>(expression);
+		
+		falsePart := tree.newLeaf(Operator.EMPTY, b.location());
+		expression = tree.newTernary(Operator.IF, b.left().fold(tree, false, compileContext), b.right().fold(tree, true, compileContext), falsePart, 
+										b.location());
+		return expression;
+
+	case	LOGICAL_OR:
+		b = ref<Binary>(expression);
+		falsePart = tree.newLeaf(Operator.EMPTY, b.location());
+		testPart := tree.newUnary(Operator.NOT, b.left(), b.location());
+		expression = tree.newTernary(Operator.IF, testPart.fold(tree, false, compileContext), b.right().fold(tree, true, compileContext), falsePart, 
+										b.location());
+		return expression;
+
+	case	DIVIDE:
+	case	SUBTRACT:
+	case	MULTIPLY:
+	case	LEFT_SHIFT:
+	case	RIGHT_SHIFT:
+	case	UNSIGNED_RIGHT_SHIFT:
+	case	AND:
+	case	OR:
 	case	SEQUENCE:
+	case	SUBSCRIPT:
 	case	EQUALITY:
 	case	NOT_EQUAL:
 	case	LESS:
@@ -4500,6 +4528,33 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		expression = tree.newBinary(Operator.SEQUENCE, left, right, b.location());
 		expression.type = b.type;
 		return expression;
+
+	case	NEGATE:
+	case	INDIRECT:
+	case	CAST:
+	case	NOT:
+	case	CLASS_OF:
+		u = ref<Unary>(expression);
+		return foldVoidContext(u.operand(), tree, compileContext);
+
+	case	ARRAY_AGGREGATE:
+	case	OBJECT_AGGREGATE:
+		nl := ref<Call>(expression).arguments();
+		list := ref<Node>(null);
+		while (nl != null) {
+			if (nl.node.op() == Operator.LABEL)
+				item := foldVoidContext(ref<Binary>(nl.node).right(), tree, compileContext);
+			else
+				item = foldVoidContext(nl.node, tree, compileContext);
+			nl = nl.next;
+			if (list == null)
+				list = item;
+			else {
+				list = tree.newBinary(Operator.SEQUENCE, list, item, expression.location());
+				list.type = item.type;
+			}
+		}
+		return list;
 
 	default:
 		expression.print(0);

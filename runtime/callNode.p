@@ -294,7 +294,11 @@ public class Call extends ParameterBag {
 					// All other calls can rely on the LHS expression type to be the correct function,
 					// but for LHS expressions that are function objects (i.e. function pointers), there is
 					// no overloaded symbol, so we can't use that.
-					if (_target == null && _target.type.deferAnalysis()) {
+					if (_target == null) {
+						type = compileContext.errorType();
+						return this;
+					}
+					if (_target.type.deferAnalysis()) {
 						type = _target.type;
 						return this;
 					}
@@ -684,7 +688,7 @@ public class Call extends ParameterBag {
 			break;
 
 		default:
-			if (_target.deferGeneration())
+			if (_target == null || _target.deferGeneration())
 				return null;
 			functionType = ref<FunctionType>(_target.type);
 		}
@@ -1400,6 +1404,7 @@ public class Call extends ParameterBag {
 				return true;
 
 			default:
+				return false;
 				printf("\nnewType: (%s) ", newType.signature());
 				newType.print();
 				printf("\n");

@@ -15,6 +15,7 @@
  */
 namespace parasol:pbuild;
 
+import parasol:compiler;
 import parasol:context;
 import parasol:exception;
 import parasol:process;
@@ -56,6 +57,8 @@ public class BuildOptions {
 	public ref<process.Option<boolean>> disassemblyOption;
 	public ref<process.Option<string>> uiReadyOption;
 	public ref<process.Option<string>> installContextOption;
+	public ref<process.Option<boolean>> elisionOption;
+	public ref<process.Option<boolean>> semiOption;
 
 	public void setOptionDefaults() {
 		if (buildDirOption == null)
@@ -90,6 +93,10 @@ public class BuildOptions {
 			uiReadyOption = process.Command.defaultStringOption();
 		if (installContextOption == null)
 			installContextOption = process.Command.defaultStringOption();
+		if (elisionOption == null)
+			elisionOption = process.Command.defaultBooleanOption();
+		if (semiOption == null)
+			semiOption = process.Command.defaultBooleanOption();
 
 		if (!buildThreadsOption.set())
 			buildThreadsOption.value = thread.cpuCount();
@@ -188,6 +195,15 @@ public class Coordinator extends CoordinatorVolatileData {
 			}
 			return false;
 		}
+
+		if (_buildOptions.elisionOption.set()) {
+			if (_buildOptions.semiOption.set()) {
+				printf("Cannot specify both --elide and --semi-colon options in the same command\n");
+				return false;
+			}
+			compiler.semiColonElision = compiler.SemiColonElision.ENABLED;
+		} else if (_buildOptions.semiOption.set())
+			compiler.semiColonElision = compiler.SemiColonElision.DISABLED;
 
 		if (_products.length() == 0) {
 			printf("    FAIL: No build files found - nothing to do.\n");

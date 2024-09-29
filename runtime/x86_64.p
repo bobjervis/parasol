@@ -2774,6 +2774,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	CLASS:
 				printf("\n>> non pointer type\n");
 				b.print(4);
+				break;
 				assert(false);
 
 			default:
@@ -3541,7 +3542,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Unary> u = ref<Unary>(node);
 			generateStaticInitializers(u.operand(), compileContext);
 			break;
-			
+
 		case	ANNOTATED:
 			b = ref<Binary>(node);
 			generateStaticInitializers(b.right(), compileContext);

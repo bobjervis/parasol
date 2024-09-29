@@ -66,10 +66,8 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	CALL:
 			ref<Call> call = ref<Call>(node);
-			if (!call.folded()) {
-				call.print(0);
-				assert(false);
-			}
+			if (!call.folded())					// This call has some sort of error associated, ignore it.
+				return;
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next)
 				markAddressModes(args.node, compileContext);
 			for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next)

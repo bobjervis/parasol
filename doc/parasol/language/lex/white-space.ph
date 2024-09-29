@@ -15,7 +15,11 @@ For example in the following:
 
 The white space between <span class=code>int</span> and <span class=code>i</span> is needed, 
 because otherwise this would be the single token <span class=code>inti</span>.
-The lack of white space between the 'i' and the semi-colon token does not alter the tokenization, and so is optional.
+The lack of white space between the 'i' and the semi-colon token does not alter the tokenization, and so white-space is optional there.
+<p>
+Other than at the beginning of a unit, white space that contains a newline character is a <i>possible statement break</i>.
+A possible statement break will be interpreted as a semi-colon token if semi-colon elision is enabled and
+the pair of tokens before and after the white space form an <i>implied statement boundary</i>.
 
 <h3>{@level 3 Comments}</h3>
 
@@ -44,4 +48,34 @@ Unlike C++ or Java, for example, Parasol has no restrictions on declaration orde
 whether a given identifier 
 is a type name at parse time, and so cannot in all cases disambiguate between comparison operators and 
 template expressions (in the absence of the implemented white-space rule).
+
+<h3>{@level 3 Implied Statement Boundaries}</h3>
+
+If semi-colon elision is enabled, possible statement breaks at implied statement boundaries will be interpreted as a semi-colon token.
+<p>
+If the token preceding or following a possible statement break is a semi-colon token, the possible statement break is ignored.
+<p>
+Otheriwse, an implied statement boundary is formed whenever the preceding token is one of the following:
+
+<ul>
+	<li><i>identifier</i>
+	<li><b>--</b> (minus minus)
+	<li><b>++</b> (plus plus)
+	<li><b>}</b> (right curly brace)
+	<li><b>)</b> (right parenthesis)
+	<li><b>]</b> (right square bracket)
+	<li><b>;</b> (semi-colon)
+</ul>
+
+and the possible statement break occurs at the end of a unit or the succeeding token is one of the following:
+
+<ul>
+	<li><i>identifier</i>
+	<li><b>{</b> (left curly brace)
+	<li><b>(</b> (left parenthesis)
+	<li><b>[</b> (left square bracket)
+	<li><b>--</b> (minus minus)
+	<li><b>++</b> (plus plus)
+	<li><b>;</b> (semi-colon)
+</ul>
 

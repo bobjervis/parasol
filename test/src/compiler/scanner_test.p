@@ -102,6 +102,7 @@ boolean scan(string filename) {
 		printf("Unable to open file %s\n", filename);
 		return false;
 	}
+	scanner.disableSemiColonElision();
 	printf("Scanning file %s\n", filename);
 	TokenInfo[] tokens; 
 	for (;;) {

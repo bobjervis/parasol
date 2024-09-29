@@ -84,6 +84,8 @@ class ParasolCommand extends process.Command {
 					"their value when the block is deleted, or when the program terminates normally. " +
 					"If the guarded heap detects that these guard areas have been modified, it throws a " +
 					"CorruptHeapException.");
+		elisionOption = booleanOption('e', "elide", "Enables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
+		semiOption = booleanOption(0, "semi-colon", "Disables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
 		versionOption = booleanOption(0, "version", "Displays the compiler version.");
 		helpOption('?', "help",
 					"Displays this help.");
@@ -102,6 +104,8 @@ class ParasolCommand extends process.Command {
 	ref<process.Option<boolean>> symbolTableOption;
 	ref<process.Option<boolean>> compileOnlyOption;
 	ref<process.Option<boolean>> versionOption;
+	ref<process.Option<boolean>> elisionOption;
+	ref<process.Option<boolean>> semiOption;
 	memory.StartingHeap heap;
 
 }
@@ -135,6 +139,14 @@ void parseCommandLine(string[] args) {
 		printf("Must include a filename for the main file of the program\n");
 		parasolCommand.help();
 	}
+	if (parasolCommand.elisionOption.set()) {
+		if (parasolCommand.semiOption.set()) {
+			printf("Cannot specify both --elide and --semi-colon options in the same command\n");
+			parasolCommand.help();
+		}
+		compiler.semiColonElision = compiler.SemiColonElision.ENABLED;
+	} else if (parasolCommand.semiOption.set())
+		compiler.semiColonElision = compiler.SemiColonElision.DISABLED;
 	if (parasolCommand.heapOption.set()) {
 		boolean foundIt;
 		for (i in heapOptionValues)

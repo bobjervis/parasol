@@ -1444,6 +1444,7 @@ class X86_64Encoder extends Target {
 	void inst(X86 instruction, runtime.TypeFamily family, R dest, long operand) {
 		if (dest == R.NO_REG) {
 			printf("%s NO_REG %d\n", string(instruction), operand);
+			return;
 			assert(false);
 		}
 		switch (instruction) {
@@ -4003,9 +4004,12 @@ class X86_64Encoder extends Target {
 	}
 		
 	private void modRM(int mod, int regOpcode, int rm) {
-//		printf("modRM(%d, %d, %d)\n", mod, regOpcode, rm);
-		assert(regOpcode >= 0 && regOpcode < 8);
-		assert(rm >= 0 && rm < 8);
+		if (regOpcode < 0 || regOpcode >= 8)
+			printf("modRM(%d,**  %d **, %d)\n", mod, regOpcode, rm);
+//		assert(regOpcode >= 0 && regOpcode < 8);
+		if (rm < 0 || rm >= 8)
+			printf("modRM(%d, %d,** %d **)\n", mod, regOpcode, rm);
+//		assert(rm >= 0 && rm < 8);
 		assert(mod >= 0 && mod < 4);
 		emit(byte((mod << 6) | (regOpcode << 3) | rm));
 	}

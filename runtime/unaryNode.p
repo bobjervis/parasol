@@ -110,9 +110,20 @@ public class Unary extends Node {
 			return this;
 		if (voidContext) {
 			switch (op()) {
+			case	INCREMENT_AFTER:
+				t := tree.newUnary(Operator.INCREMENT_BEFORE, _operand, _operand.location());
+				t.type = _operand.type;
+				return t.fold(tree, true, compileContext);
+
+			case	DECREMENT_AFTER:
+				t = tree.newUnary(Operator.DECREMENT_BEFORE, _operand, _operand.location());
+				t.type = _operand.type;
+				return t.fold(tree, true, compileContext);
+				
 			case	ADDRESS:
 			case	NEGATE:
 			case	CAST:
+			case	INDIRECT:
 				return _operand.fold(tree, true, compileContext);
 			}
 		}

@@ -15,6 +15,7 @@
  */
 namespace parasollanguage.org:debug;
 
+import parasol:compiler;
 import parasol:process;
 
 public class PBugOptions {
@@ -26,6 +27,8 @@ public class PBugOptions {
 	public ref<process.Option<string>> controlOption;
 	public ref<process.Option<int>> managerOption;
 	public ref<process.Option<boolean>> verboseOption;
+	public ref<process.Option<boolean>> elisionOption;
+	public ref<process.Option<boolean>> semiOption;
 
 	PBugOptions(ref<process.Command> command) {
 		processOption = command.integerOption('p', "process", "The id of a running process that is not already " +
@@ -46,6 +49,8 @@ public class PBugOptions {
 					"This is useful when debugging a script rather than a compiled application.");
 		joinOption = command.stringOption('j', "join",
 					"Join a running debug session. The string argument is the host:port identity of a running debug session.");
+		elisionOption = command.booleanOption('e', "elide", "Enables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
+		semiOption = command.booleanOption(0, "semi-colon", "Disables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
 	}
 
 	public string[] copiedOptions() {
@@ -64,6 +69,10 @@ public class PBugOptions {
 		}
 		if (verboseOption.set())
 			copy.append("-v");
+		if (elisionOption.set())
+			copy.append("-e");
+		if (semiOption.set())
+			copy.append("--semi-colon");
 		if (parasolLocationOption.set())
 			copy.append("--location=" + parasolLocationOption.value);
 		return copy;

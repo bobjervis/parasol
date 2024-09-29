@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
 import parasol:process;
 import parasol:pbuild;
 import parasol:runtime;
@@ -91,6 +92,8 @@ class PBuildCommand extends process.Command {
 					"Default: " + pbuild.thisCPU());
 		buildOptions.suitesOption = stringOption(0, "tests",
 					"Run the indicated test suite(s) after successful completion of the build.");
+		buildOptions.elisionOption = booleanOption('e', "elide", "Enables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
+		buildOptions.semiOption = booleanOption(0, "semi-colon", "Disables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
 		helpOption('?', "help",
 					"Displays this help.");
 		versionOption("version", "Display the version of the pbuild app.");

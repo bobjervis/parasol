@@ -217,8 +217,21 @@ public class StringScanner extends Scanner {
 	}
 }
 
+public enum SemiColonElision {
+	ENABLED,
+	DISABLED,
+}
+
+public SemiColonElision semiColonElision = SemiColonElision.ENABLED;
+
 public class Scanner {
+	/**
+	 * If enableSemiColonElision is true, each call to next will return a SEMI_COLON token for each
+	 * newline located between @{link
+	 */
+	private boolean _enableSemiColonElision;
 	private Token _pushback;
+	private SourceOffset _pushbackLocation;
 	private string _value;
 	private ref<Unit> _file;
 	private boolean _utfError;
@@ -229,13 +242,21 @@ public class Scanner {
 	 */
 	private SourceOffset _location;
 	/*
+	 * Location of a possible elided semi-colon
+	 */
+	private SourceOffset _possiblyElidedSemiLocation;
+	/*
 	 * _lastChar is the last Unicode code point value returned by getc
 	 */
 	private int _lastChar;
 	/*
-	 * This is the cursor value before the last getc call, so if we unetc, we can restore the cursor
+	 * This is the cursor value before the last getc call, so if we ungetc, we can restore the cursor
 	 */
 	private int _lastCursor;
+	/*
+	 * The last token returned, needed for semi-colon elision algorithm
+	 */
+	private Token _lastToken;
 	/*
 	 * This is the cursor value after the last getc call, so if we ungetc, this will be the cursor
 	 * we restore when we read the ungotten character.
@@ -273,6 +294,17 @@ public class Scanner {
 			_file = new Unit("<inline>", baseLineNumber);
 		else
 			_file = file;
+		_possiblyElidedSemiLocation = SourceOffset.MIN_VALUE;
+		_lastToken = Token.EMPTY;
+		restoreSemiColonElision();
+	}
+
+	public void disableSemiColonElision() {
+		_enableSemiColonElision = false;
+	}
+
+	public void restoreSemiColonElision() {
+		_enableSemiColonElision = semiColonElision == SemiColonElision.ENABLED;
 	}
 
 	public boolean opened() {
@@ -288,8 +320,27 @@ public class Scanner {
 		if (_pushback != Token.EMPTY) {
 			t = _pushback;
 			_pushback = Token.EMPTY;
+			_lastToken = t;
+			_location = _pushbackLocation;
 			return t;
 		}
+		t = nextToken();
+		if (_possiblyElidedSemiLocation != SourceOffset.MIN_VALUE) {
+			if (_lastToken != Token.EMPTY && isElidedSemicolon(_lastToken, t)) {
+				_pushbackLocation = _location;
+				_pushback = t;
+				_location = _possiblyElidedSemiLocation;
+				t = Token.SEMI_COLON;
+			}
+			_possiblyElidedSemiLocation = SourceOffset.MIN_VALUE;
+		}
+		_lastToken = t;
+		return t;
+	}
+
+	private Token nextToken() {
+		Token t;
+
 		for (;;) {
 			_location = cursor();
 			int c = getc();
@@ -318,6 +369,7 @@ public class Scanner {
 
 			case	'\n':
 				_file.append(_location);
+				_possiblyElidedSemiLocation = _location;
 				continue;
 
 			case	0x0b:
@@ -1305,6 +1357,7 @@ public class Scanner {
 
 	public void pushBack(Token t) {
 		_pushback = t;
+		_pushbackLocation = _location;
 	}
 	
 	public ref<Unit> file() {
@@ -1434,6 +1487,116 @@ public class Scanner {
 
 	private void addCharacter(int c) {
 		_value.append(c);
+	}
+
+	private boolean isElidedSemicolon(Token last, Token current) {
+		if (!_enableSemiColonElision)
+			return false;
+		switch (last) {
+		case SEMI_COLON:
+		case COMMA:
+		case LEFT_ANGLE:
+		case LEFT_SQUARE:
+		case LEFT_PARENTHESIS:
+		case LEFT_CURLY:
+		case ANNOTATION:
+		case DO:
+		case ELSE:
+		case PLUS:
+		case DASH:
+		case CARET:
+		case VERTICAL_BAR:
+		case AMPERSAND:
+		case EQUALS:
+		case QUESTION_MARK:
+		case COLON:
+		case ELLIPSIS:
+		case DOT_DOT:
+		case CO_EQ:						// :=
+		case SLASH_EQ:
+		case PERCENT_EQ:
+		case ASTERISK_EQ:
+		case PLUS_EQ:
+		case DASH_EQ:
+		case AMPERSAND_EQ:
+		case CARET_EQ:
+		case VERTICAL_BAR_EQ:
+		case EQ_EQ:						// ==
+		case EQ_EQ_EQ:					// ===
+		case LA_EQ:						// <=
+		case RA_EQ:						// >=
+		case LA_RA:						// <>
+		case LA_RA_EQ:					// <>=
+		case EXCLAMATION_EQ:				// !=
+		case EX_EQ_EQ:					// !==
+		case EX_LA:						// !<
+		case EX_RA:						// !>
+		case EX_LA_EQ:					// !<=
+		case EX_RA_EQ:					// !>=
+		case EX_LA_RA:					// !<>
+		case EX_LA_RA_EQ:				// !<>=
+		case LA_LA:						// <<
+		case RA_RA:						// >>
+		case RA_RA_RA:					// >>>
+		case LA_LA_EQ:					// <<=
+		case RA_RA_EQ:					// >>=
+		case RA_RA_RA_EQ:				// >>>=
+		case AMP_AMP:
+		case VBAR_VBAR:
+			return false;
+		}
+		switch (current) {
+		case SEMI_COLON:
+		case COMMA:
+		case RIGHT_ANGLE:
+		case RIGHT_SQUARE:
+		case RIGHT_PARENTHESIS:
+		case PLUS:
+		case DASH:
+		case CARET:
+		case VERTICAL_BAR:
+		case AMPERSAND:
+		case EQUALS:
+		case QUESTION_MARK:
+		case COLON:
+		case ELLIPSIS:
+		case DOT_DOT:
+		case CO_EQ:						// :=
+		case SLASH_EQ:
+		case PERCENT_EQ:
+		case ASTERISK_EQ:
+		case PLUS_EQ:
+		case DASH_EQ:
+		case AMPERSAND_EQ:
+		case CARET_EQ:
+		case VERTICAL_BAR_EQ:
+		case EQ_EQ:						// ==
+		case EQ_EQ_EQ:					// ===
+		case LA_EQ:						// <=
+		case RA_EQ:						// >=
+		case LA_RA:						// <>
+		case LA_RA_EQ:					// <>=
+		case EXCLAMATION_EQ:				// !=
+		case EX_EQ_EQ:					// !==
+		case EX_LA:						// !<
+		case EX_RA:						// !>
+		case EX_LA_EQ:					// !<=
+		case EX_RA_EQ:					// !>=
+		case EX_LA_RA:					// !<>
+		case EX_LA_RA_EQ:				// !<>=
+		case LA_LA:						// <<
+		case RA_RA:						// >>
+		case RA_RA_RA:					// >>>
+		case LA_LA_EQ:					// <<=
+		case RA_RA_EQ:					// >>=
+		case RA_RA_RA_EQ:				// >>>=
+		case AMP_AMP:
+		case VBAR_VBAR:
+			return false;
+		}
+
+//		printf("isElidedSemicolon(%s, %s) @ %s %d\n", string(last), string(current), _file.filename(), _file.lineNumber(_location) + 1);
+		return true;
 	}
 }
 /**
