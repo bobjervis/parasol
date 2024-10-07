@@ -222,7 +222,7 @@ void inputLoop() {
 			column = (c >> 16) & 0xff;
 			row = (c >> 24) & 0xff;
 			if (button != 0)
-				printf("%s @(%d,%d) button %d%s%s%s", string(key), row, column, button, (shifts & 1) != 0 ? " shift" : "",
+				logger.info("%s @(%d,%d) button %d%s%s%s", string(key), row, column, button, (shifts & 1) != 0 ? " shift" : "",
 					(shifts & 2) != 0 ? " alt" : "", (shifts & 4) != 0 ? " ctl" : "");
 			break;
 

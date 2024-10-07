@@ -14,7 +14,7 @@
    limitations under the License.
  */
 define(
-	PARASOL_VERSION: 0.13.0,
+	PARASOL_VERSION: 0.13.1,
 	BUILD_VERSION: 0.2.0,
 	DEBUG_VERSION: 0.1.0,
 	)

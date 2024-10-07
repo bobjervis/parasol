@@ -271,6 +271,7 @@ class ScanObject extends script.Object {
 		StringScanner scanner(_source, 0, "StringScanner test");
 		Token t;
 		int i;
+		scanner.disableSemiColonElision();
 		for (i = 0; ; i++) {
 			if (_tokenCount != -1) {
 				if (i >= _tokenCount + 1)
@@ -315,6 +316,7 @@ class ScanObject extends script.Object {
 	void dump() {
 		printf("Scanning '%s' (%d)\n", _source, _source.length());
 		StringScanner scanner(_source, 0, "StringScanner test");
+		scanner.disableSemiColonElision();
 		Token t;
 		do {
 			t = scanner.next();
@@ -363,6 +365,7 @@ class ExpressionObject extends script.Object {
 		ref<Unit> f = new Unit();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
+		scanner.disableSemiColonElision();
 		ref<SyntaxTree> tree = new SyntaxTree();
 		Parser parser(tree, scanner);
 
@@ -401,6 +404,7 @@ class ExpressionObject extends script.Object {
 	void dump(ref<Node> expression) {
 		printf("Scanning '%s'\n", _source);
 		StringScanner scanner(_source, 0, "StringScanner test");
+		scanner.disableSemiColonElision();
 		Token t;
 		do {
 			t = scanner.next();
@@ -455,9 +459,12 @@ class StatementObject extends script.Object {
 	}
 
 	public boolean run() {
+		saved := compiler.semiColonElision;
+		compiler.semiColonElision = compiler.SemiColonElision.DISABLED;
 		ref<Unit> f = new Unit();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
+		scanner.disableSemiColonElision();
 		ref<SyntaxTree> tree = new SyntaxTree();
 		Parser parser(tree, scanner);
 
@@ -473,6 +480,7 @@ class StatementObject extends script.Object {
 			outcome = Expect.RECOVERED;
 		else
 			outcome = Expect.FAIL;
+		compiler.semiColonElision = saved;
 		if (checkInOrder(statement, _source)) {
 			if (outcome == Expect.SUCCESS) {
 				if (statement.countMessages() > 0)
@@ -498,6 +506,7 @@ class StatementObject extends script.Object {
 	private void dump(ref<Node> expression) {
 		printf("Scanning '%s'\n", _source);
 		StringScanner scanner(_source, 0, "StringScanner test");
+		scanner.disableSemiColonElision();
 		Token t;
 		do {
 			t = scanner.next();

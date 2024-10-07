@@ -763,7 +763,7 @@ public class LogHandler extends LogHandlerVolatileData {
 				t = _writeThread;
 			}
 		}
-		// We really can't do this call under this lock, since the write thread wants to use the same lock
+		// We really can't do this call under the above lock, since the write thread wants to use the same lock
 		if (t != null) {
 			t.join();
 			lock (*this) {

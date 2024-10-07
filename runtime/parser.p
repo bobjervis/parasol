@@ -123,6 +123,7 @@ public class Parser {
 //			printf("_scanner is wrong-o\n");
 //			process.exit(1);
 //		}
+		previous := _scanner.allowSemiColonElision();
 		for (;;) {
 			Token t = _scanner.next();
 //			CompileString cs = _scanner.value();
@@ -131,9 +132,8 @@ public class Parser {
 //			printf("Token %s %s %d\n", string(t), s, line);
 			if (t == Token.RIGHT_CURLY) {
 				block.closeCurlyLocation = _scanner.location();
-				_scanner.disableSemiColonElision();
-				_scanner.pushBack(_scanner.next());
-				_scanner.restoreSemiColonElision();
+				_scanner.preventSemiColon();
+				_scanner.restoreSemiColonElision(previous);
 				return block;
 			} else if (t == Token.END_OF_STREAM) {
 				block.closeCurlyLocation = _scanner.location();
@@ -164,9 +164,7 @@ public class Parser {
 
 		case	LEFT_CURLY:
 			x = parseBlock(_tree.newBlock(Operator.BLOCK, false, location));
-			_scanner.disableSemiColonElision();
-			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision();
+			_scanner.preventSemiColon();
 			return x;
 
 		case	BREAK:
@@ -186,10 +184,7 @@ public class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.CASE_NO_CO);
 			}
-			_scanner.disableSemiColonElision();
-			t = _scanner.next();
-			_scanner.pushBack(t);
-			_scanner.restoreSemiColonElision();
+			t = _scanner.preventSemiColon();
 			if (t == Token.RIGHT_CURLY)
 				return resync(MessageId.UNEXPECTED_RC);
 			truePart = parseStatement();
@@ -211,10 +206,7 @@ public class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			_scanner.disableSemiColonElision();
-			t = _scanner.next();
-			_scanner.pushBack(t);
-			_scanner.restoreSemiColonElision();
+			t = _scanner.preventSemiColon();
 			if (t == Token.RIGHT_CURLY)
 				return resync(MessageId.UNEXPECTED_RC);
 			truePart = parseStatement();
@@ -290,9 +282,7 @@ public class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			_scanner.disableSemiColonElision();
-			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision();
+			_scanner.preventSemiColon();
 			truePart = parseStatement();
 			if (truePart.op() == Operator.SYNTAX_ERROR)
 				return truePart;
@@ -337,14 +327,14 @@ public class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			_scanner.disableSemiColonElision();
+			previous := _scanner.disableSemiColonElision();
 			t = _scanner.next();
 			if (t != Token.LEFT_CURLY) {
-				_scanner.restoreSemiColonElision();
+				_scanner.restoreSemiColonElision(previous);
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			_scanner.restoreSemiColonElision();
+			_scanner.restoreSemiColonElision(previous);
 			ref<Block> body = _tree.newBlock(Operator.BLOCK, true, _scanner.location());
 			truePart = parseBlock(body);
 			if (truePart.op() == Operator.SYNTAX_ERROR)
@@ -365,9 +355,7 @@ public class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			_scanner.disableSemiColonElision();
-			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision();
+			_scanner.preventSemiColon();
 			truePart = parseStatement();
 			if (truePart.op() == Operator.SYNTAX_ERROR)
 				return truePart;
@@ -713,9 +701,7 @@ public class Parser {
 //			printf("Token %s %s %d\n", string(t), s, line);
 			if (t == Token.RIGHT_CURLY) {
 				block.closeCurlyLocation = _scanner.location();
-				_scanner.disableSemiColonElision();
-				_scanner.pushBack(_scanner.next());
-				_scanner.restoreSemiColonElision();
+				_scanner.preventSemiColon();
 				return block;
 			} else if (t == Token.END_OF_STREAM) {
 				block.closeCurlyLocation = _scanner.location();
@@ -1102,12 +1088,12 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		_scanner.disableSemiColonElision();
+		previous := _scanner.disableSemiColonElision();
 		ref<Block> body = _tree.newBlock(Operator.FLAGS, false, _scanner.location());
 		ref<Node> e = parseIdentifierList();
 		body.statement(_tree.newNodeList(e));
 		t = _scanner.next();
-		_scanner.restoreSemiColonElision();
+		_scanner.restoreSemiColonElision(previous);
 		if (t != Token.RIGHT_CURLY) {
 			if (e.op() != Operator.SYNTAX_ERROR) {
 				ref<Node> err = _tree.newSyntaxError(_scanner.location());
@@ -1115,11 +1101,8 @@ public class Parser {
 				body.statement(_tree.newNodeList(err));
 			}
 			parseBlock(body);
-		} else {
-			_scanner.disableSemiColonElision();
-			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision();
-		}
+		} else
+			_scanner.preventSemiColon();
 		return _tree.newBinary(Operator.FLAGS_DECLARATION, identifier, body, location);
 	}
 
@@ -1139,14 +1122,14 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		_scanner.disableSemiColonElision();
+		previous := _scanner.disableSemiColonElision();
 		ref<Node> e = parseEnumInstanceList();
 
 		t = _scanner.next();
 		ref<ClassDeclarator> body = _tree.newClassDeclarator(Operator.ENUM, identifier, e, enumLoc);
 		if (t == Token.RIGHT_CURLY) {
 			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision();
+			_scanner.restoreSemiColonElision(previous);
 			return body;
 		} else if (t != Token.SEMI_COLON) {
 			if (e.op() != Operator.SYNTAX_ERROR) {
@@ -1155,7 +1138,7 @@ public class Parser {
 				body.statement(_tree.newNodeList(err));
 			}
 		}
-		_scanner.restoreSemiColonElision();
+		_scanner.restoreSemiColonElision(previous);
 		ref<ClassDeclarator> oldEnclosing = pushEnclosing(body);
 		parseBlock(body);
 		pushEnclosing(oldEnclosing);
@@ -1264,9 +1247,7 @@ public class Parser {
 				return resync(MessageId.SYNTAX_ERROR);
 			}
 		}
-		_scanner.disableSemiColonElision();
-		_scanner.pushBack(_scanner.next());
-		_scanner.restoreSemiColonElision();
+		_scanner.preventSemiColon();
 		body = parseStatement();
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
@@ -1311,9 +1292,7 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		_scanner.disableSemiColonElision();
-		_scanner.pushBack(_scanner.next());
-		_scanner.restoreSemiColonElision();
+		_scanner.preventSemiColon();
 		ref<Node> body = parseStatement();
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
@@ -1640,7 +1619,7 @@ public class Parser {
 		else
 			endingToken = Token.RIGHT_CURLY;
 		ref<Node>[] leftHandle;
-		_scanner.disableSemiColonElision();
+		previous := _scanner.disableSemiColonElision();
 		for (;;) {
 			Token t = _scanner.next();
 			if (t == endingToken)
@@ -1680,17 +1659,16 @@ public class Parser {
 					break;
 				else if (t != Token.COMMA) {
 					_scanner.pushBack(t);
-					_scanner.restoreSemiColonElision();
+					_scanner.restoreSemiColonElision(previous);
 					return resync(MessageId.SYNTAX_ERROR);
 				}
 			} else if (t != Token.COMMA) {
 				_scanner.pushBack(t);
-				_scanner.restoreSemiColonElision();
+				_scanner.restoreSemiColonElision(previous);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
 		}
-		_scanner.pushBack(_scanner.next());
-		_scanner.restoreSemiColonElision();
+		_scanner.restoreSemiColonElision(previous);
 		return _tree.newCall(startingToken == Token.LEFT_SQUARE ? Operator.ARRAY_AGGREGATE : Operator.OBJECT_AGGREGATE, null, 
 				leftHandle.length() > 0 ? _tree.newNodeList(leftHandle) : null, location);
 	}
@@ -1862,14 +1840,16 @@ public class Parser {
 			ref<NodeList> arguments = null;
 			ref<NodeList> last = null;
 			if (t == Token.LEFT_PARENTHESIS) {
-				_scanner.disableSemiColonElision();
+				previous := _scanner.disableSemiColonElision();
 				t = _scanner.next();
 				if (t != Token.RIGHT_PARENTHESIS) {
 					_scanner.pushBack(t);
 					for (;;) {
 						ref<Node> annotationArguments = parseExpression(binaryOperators.precedence(Operator.ASSIGN));
-						if (annotationArguments.op() == Operator.SYNTAX_ERROR)
+						if (annotationArguments.op() == Operator.SYNTAX_ERROR) {
+							_scanner.restoreSemiColonElision(previous);
 							return annotationArguments;
+						}
 						ref<NodeList> nl = _tree.newNodeList(annotationArguments);
 						if (last != null)
 							last.next = nl;
@@ -1886,7 +1866,7 @@ public class Parser {
 					}
 				}
 				_scanner.pushBack(_scanner.next());
-				_scanner.restoreSemiColonElision();
+				_scanner.restoreSemiColonElision(previous);
 			} else
 				_scanner.pushBack(t);
 			ref<Call> annotation = _tree.newCall(Operator.ANNOTATION, id, arguments, location);

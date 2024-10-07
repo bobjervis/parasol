@@ -225,13 +225,16 @@ public enum SemiColonElision {
 public SemiColonElision semiColonElision = SemiColonElision.ENABLED;
 
 public class Scanner {
+	private class PushbackEntry {
+		Token token;
+		SourceOffset location;
+	}
 	/**
 	 * If enableSemiColonElision is true, each call to next will return a SEMI_COLON token for each
 	 * newline located between @{link
 	 */
 	private boolean _enableSemiColonElision;
-	private Token _pushback;
-	private SourceOffset _pushbackLocation;
+	private PushbackEntry[] _pushback;
 	private string _value;
 	private ref<Unit> _file;
 	private boolean _utfError;
@@ -288,7 +291,10 @@ public class Scanner {
 	}
 	
 	protected Scanner(int baseLineNumber, ref<Unit> file) {
-		_pushback = Token.EMPTY;
+		PushbackEntry pe = {
+			token: Token.EMPTY
+		};
+		_pushback.append(pe);
 		_lastByte = -1;
 		if (file == null)
 			_file = new Unit("<inline>", baseLineNumber);
@@ -296,15 +302,30 @@ public class Scanner {
 			_file = file;
 		_possiblyElidedSemiLocation = SourceOffset.MIN_VALUE;
 		_lastToken = Token.EMPTY;
-		restoreSemiColonElision();
+		allowSemiColonElision();
 	}
 
-	public void disableSemiColonElision() {
+	public boolean disableSemiColonElision() {
+		previousState := _enableSemiColonElision;
 		_enableSemiColonElision = false;
+		return previousState;
 	}
 
-	public void restoreSemiColonElision() {
+	public boolean allowSemiColonElision() {
+		previousState := _enableSemiColonElision;
 		_enableSemiColonElision = semiColonElision == SemiColonElision.ENABLED;
+		return previousState;
+	}
+
+	public Token preventSemiColon() {
+		previousState := disableSemiColonElision();
+		pushBack(t := next());
+		restoreSemiColonElision(previousState);
+		return t;
+	}
+
+	public void restoreSemiColonElision(boolean priorState) {
+		_enableSemiColonElision = priorState;
 	}
 
 	public boolean opened() {
@@ -317,18 +338,16 @@ public class Scanner {
 	public Token next() {
 		Token t;
 
-		if (_pushback != Token.EMPTY) {
-			t = _pushback;
-			_pushback = Token.EMPTY;
-			_lastToken = t;
-			_location = _pushbackLocation;
-			return t;
+		if (_pushback.length() > 1) {
+			e := _pushback.pop();
+			_lastToken = e.token;
+			_location = e.location;
+			return e.token;
 		}
 		t = nextToken();
 		if (_possiblyElidedSemiLocation != SourceOffset.MIN_VALUE) {
-			if (_lastToken != Token.EMPTY && isElidedSemicolon(_lastToken, t)) {
-				_pushbackLocation = _location;
-				_pushback = t;
+			if (isElidedSemicolon(_lastToken, t)) {
+				pushBack(t);
 				_location = _possiblyElidedSemiLocation;
 				t = Token.SEMI_COLON;
 			}
@@ -350,6 +369,7 @@ public class Scanner {
 				return Token.ERROR;
 			
 			case	-1:
+				_possiblyElidedSemiLocation = _location;
 				return Token.END_OF_STREAM;
 
 			case	0x00:
@@ -365,11 +385,17 @@ public class Scanner {
 				return Token.ERROR;
 
 			case	'\t':
+				t := afterWhiteSpace();
+				if (t != Token.EMPTY)
+					return t;
 				continue;
 
 			case	'\n':
 				_file.append(_location);
 				_possiblyElidedSemiLocation = _location;
+				t = afterWhiteSpace();
+				if (t != Token.EMPTY)
+					return t;
 				continue;
 
 			case	0x0b:
@@ -378,6 +404,9 @@ public class Scanner {
 
 			case	'\f':
 			case	'\r':
+				t = afterWhiteSpace();
+				if (t != Token.EMPTY)
+					return t;
 				continue;
 
 			case	0x0e:
@@ -402,57 +431,9 @@ public class Scanner {
 				return Token.ERROR;
 
 			case	' ':
-				SourceOffset spLoc = _location;
-				_location = cursor();
-				c = getc();
-				if (c == '<') {
-					c = getc();
-					if (c == '=') {
-						_location = spLoc;
-						return Token.LA_EQ;
-					} else if (c == '<') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=')
-							return Token.LA_LA_EQ;
-						ungetc();
-						return Token.LA_LA;
-					} else if (c == '>') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=')
-							return Token.LA_RA_EQ;
-						ungetc();
-						return Token.LA_RA;
-					}
-					ungetc();
-					_location = spLoc;
-					return Token.SP_LA;
-				} else if (c == '>') {
-					c = getc();
-					if (c == '=') {
-						_location = spLoc;
-						return Token.RA_EQ;
-					} else if (c == '>') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=') {
-							return Token.RA_RA_EQ;
-						} else if (c == '>') {
-							c = getc();
-							if (c == '=')
-								return Token.RA_RA_RA_EQ;
-							ungetc();
-							return Token.RA_RA_RA;
-						}
-						ungetc();
-						return Token.RA_RA;
-					}
-					ungetc();
-					_location = spLoc;
-					return Token.SP_RA;
-				}
-				ungetc();
+				t = afterWhiteSpace();
+				if (t != Token.EMPTY)
+					return t;
 				continue;
 
 			case	'!':
@@ -776,6 +757,61 @@ public class Scanner {
 					return number(c);
 			}
 		}
+	}
+
+	private Token afterWhiteSpace() {
+		spLoc := _location;
+		_location = cursor();
+		c := getc();
+		if (c == '<') {
+			c = getc();
+			if (c == '=') {
+				_location = spLoc;
+				return Token.LA_EQ;
+			} else if (c == '<') {
+				_location = spLoc;
+				c = getc();
+				if (c == '=')
+					return Token.LA_LA_EQ;
+				ungetc();
+				return Token.LA_LA;
+			} else if (c == '>') {
+				_location = spLoc;
+				c = getc();
+				if (c == '=')
+					return Token.LA_RA_EQ;
+				ungetc();
+				return Token.LA_RA;
+			}
+			ungetc();
+			_location = spLoc;
+			return Token.SP_LA;
+		} else if (c == '>') {
+			c = getc();
+			if (c == '=') {
+				_location = spLoc;
+				return Token.RA_EQ;
+			} else if (c == '>') {
+				_location = spLoc;
+				c = getc();
+				if (c == '=') {
+					return Token.RA_RA_EQ;
+				} else if (c == '>') {
+					c = getc();
+					if (c == '=')
+						return Token.RA_RA_RA_EQ;
+					ungetc();
+					return Token.RA_RA_RA;
+				}
+				ungetc();
+				return Token.RA_RA;
+			}
+			ungetc();
+			_location = spLoc;
+			return Token.SP_RA;
+		}
+		ungetc();
+		return Token.EMPTY;
 	}
 
 	private Token identifier(int c) {
@@ -1349,15 +1385,18 @@ public class Scanner {
 	}
 
 	public void seek(SourceOffset location) {
-		_pushback = Token.EMPTY;
+		_pushback.resize(1);
 		_lastByte = -1;
 		_lastChar = 0;
 		_cursor = location;
 	}
 
 	public void pushBack(Token t) {
-		_pushback = t;
-		_pushbackLocation = _location;
+		PushbackEntry entry = {
+			token: t,
+			location: _location
+		};
+		_pushback.append(entry);
 	}
 	
 	public ref<Unit> file() {
@@ -1492,16 +1531,26 @@ public class Scanner {
 	private boolean isElidedSemicolon(Token last, Token current) {
 		if (!_enableSemiColonElision)
 			return false;
+		if (current == Token.END_OF_STREAM)
+			return true;
 		switch (last) {
+		case EMPTY:			// 'last' token value at start of unit.
 		case SEMI_COLON:
 		case COMMA:
+		case TILDE:
+		case SP_LA:
+		case SP_RA:
 		case LEFT_ANGLE:
+		case RIGHT_ANGLE:
 		case LEFT_SQUARE:
 		case LEFT_PARENTHESIS:
 		case LEFT_CURLY:
 		case ANNOTATION:
 		case DO:
 		case ELSE:
+		case ASTERISK:
+		case SLASH:
+		case PERCENT:
 		case PLUS:
 		case DASH:
 		case CARET:
@@ -1527,7 +1576,7 @@ public class Scanner {
 		case RA_EQ:						// >=
 		case LA_RA:						// <>
 		case LA_RA_EQ:					// <>=
-		case EXCLAMATION_EQ:				// !=
+		case EXCLAMATION_EQ:			// !=
 		case EX_EQ_EQ:					// !==
 		case EX_LA:						// !<
 		case EX_RA:						// !>
@@ -1548,9 +1597,16 @@ public class Scanner {
 		switch (current) {
 		case SEMI_COLON:
 		case COMMA:
+		case TILDE:
+		case SP_LA:
+		case SP_RA:
+		case LEFT_ANGLE:
 		case RIGHT_ANGLE:
 		case RIGHT_SQUARE:
 		case RIGHT_PARENTHESIS:
+		case ASTERISK:
+		case SLASH:
+		case PERCENT:
 		case PLUS:
 		case DASH:
 		case CARET:
@@ -1576,7 +1632,7 @@ public class Scanner {
 		case RA_EQ:						// >=
 		case LA_RA:						// <>
 		case LA_RA_EQ:					// <>=
-		case EXCLAMATION_EQ:				// !=
+		case EXCLAMATION_EQ:			// !=
 		case EX_EQ_EQ:					// !==
 		case EX_LA:						// !<
 		case EX_RA:						// !>

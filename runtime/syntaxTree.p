@@ -2754,7 +2754,8 @@ class Map extends Node {
 	}
 	
 	public void print(int indent) {
-		assert(false);
+		printBasic(indent);
+		printf("\n");
 	}
 }
 
