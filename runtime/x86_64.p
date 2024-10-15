@@ -4225,9 +4225,16 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(args.node, compileContext);
 			if (args.node.op() == Operator.VACATE_ARGUMENT_REGISTERS) {
 				int depth = f().r.bytesPushed();
+				// stackPushes are the total bytes that will be pushed to create stack arguments - callee with remove them
+				// cleanup is the memory consumed by ellipsis array arguments - only caller knows this value
+				// depth is the memory consumed by pushed temps that are on the stack at the call
+				// stackAdjustment is the memory adjustment made by any enclosing call.
 				stackAlignment = (stackPushes + cleanup + depth + f().stackAdjustment) & 15;
-				// The only viable stack alignment value has to be 16, anything else is a compiler bug.
+				// The only viable stack alignment value has to be 0 or 8, anything else is a compiler bug.
 				if (stackAlignment != 0) {
+						if (verbose())
+							printf("stack alignment needed stackPushes = %d cleanup = %d depth = %d f().stackAdjustment = %d\n",
+										stackPushes, cleanup, depth, f().stackAdjustment);
 					assert(stackAlignment == 8);
 					cleanup += 8;
 					f().stackAdjustment += stackAlignment;
@@ -4310,6 +4317,9 @@ public class X86_64 extends X86_64AssignTemps {
 			assert(false);
 		}
 		if (cleanup != 0) {
+			if (verbose())
+				printf("stack alignment needed after call cleanup = %d f().stackAdjustment = %d\n",
+										cleanup, f().stackAdjustment);
 			f().stackAdjustment -= stackAlignment;
 			inst(X86.ADD, runtime.TypeFamily.SIGNED_64, R.RSP, cleanup);		// What about destructors?
 		}
@@ -4332,7 +4342,12 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateEllipsisArguments(ref<EllipsisArguments> ea, ref<CompileContext> compileContext) {
 		int vargCount = ea.argumentCount();
 		ea.type.assignSize(this, compileContext);
-		inst(X86.SUB, runtime.TypeFamily.SIGNED_64, R.RSP, ea.stackConsumed());
+		if (ea.stackConsumed() > 0) {
+			inst(X86.SUB, runtime.TypeFamily.SIGNED_64, R.RSP, ea.stackConsumed());
+			if (verbose())
+				printf("stack alignment needed ellipsis allocation %d stackAdjustment %d\n", ea.stackConsumed(), f().stackAdjustment);
+		}
+		
 		// TODO: Zero out the memory
 		int offset = 0;
 		if (vargCount > 0) {
@@ -4371,7 +4386,8 @@ public class X86_64 extends X86_64AssignTemps {
 					
 				default:
 					if (n.type.family() == runtime.TypeFamily.VOID) {
-						n.traverse(Node.Traversal.IN_ORDER, adjustEllipsisDataOffset, &offset);
+						adjustedOffset := offset + (f().stackAdjustment & 15)
+						n.traverse(Node.Traversal.IN_ORDER, adjustEllipsisDataOffset, &adjustedOffset);
 						generate(n, compileContext);
 						break;
 					}

@@ -890,9 +890,10 @@ class ExitCalled extends TracerWorkItem {
 				n.exitCalled(_now, _thread.process().exitStatus());
 			_thread.run();					// Clean itself up.
 		} else {
-			_thread.process().exitedFromSigkill(_thread);
-			if (n != null)
+			if (n != null) {
 				n.killed(_now, _thread.process().id(), _thread.process().killSig());
+			}
+			_thread.process().exitedFromSigkill(_thread);
 		}
 	}
 }

@@ -33,6 +33,7 @@ dir(path: test/src) {
 		run(filename: byte_to_enum.p)
 		run(filename: call_args.p)
 		run(filename: call_lots_o_params.p)
+		run(filename: call_stack_args.p)
 		run(filename: char_ops.p)
 		run(filename: class_alias.p)
 		run(filename: class_aggregate.p)

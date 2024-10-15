@@ -895,7 +895,7 @@ private monitor class PendingChildren {
 	void declareChild(linux.pid_t pid, void (int, address) handler, address arg) {
 		ref<PendingChild> pc = new PendingChild(pid, handler, arg);
 		if (_waiter == null) {
-			_waiter = new Thread();
+			_waiter = new Thread("ChildWaiter for pid " + pid);
 			_waiter.start(childWaiter, null);
 		}
 		for (int i = 0; i < _children.length(); i++)

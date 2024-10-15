@@ -432,7 +432,7 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 
 	void startReader() {
 		_transport.reader = new WebSocketReader<OBJECT, PROXY>(&_transport, _upstreamObject, _downstreamProxy);
-		_transport.socket.startReader(_transport.reader);
+		_transport.socket.startReader(_transport.reader, "RPC Reader");
 	}
 
 	public void shutdown() {

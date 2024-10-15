@@ -175,11 +175,11 @@ private monitor class WebSocketVolatileData {
 	private WebSocketReader _reader;
 	private boolean _sentClose;
 
-	public boolean startReader(WebSocketReader reader) {
+	public boolean startReader(WebSocketReader reader, string threadName) {
 		if (_readerThread != null)
 			return false;
 		_reader = reader;
-		_readerThread = new Thread();
+		_readerThread = new Thread(threadName);
 		_readerThread.start(readWrapper, this);
 		return true;
 	}

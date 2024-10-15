@@ -27,9 +27,24 @@ public interface SessionNotifications {
 	/**
 	 * The process described in the info has stopped after an exec system call.
 	 *
+	 * @param at The time when the event happened
 	 * @param info a ProcessInfo object describing the process that stopped.
 	 */
 	void afterExec(time.Time at, ProcessInfo info);
+	/**
+	 * The process described in the info has terminated.
+	 *
+	 * @param at The time when the event happened
+	 * @param info a ProcessInfo object describing the process that terminated.
+	 */
+	void killed(time.Time at, ProcessInfo info, int killSig);
+	/**
+	 * The debug manager has been commanded to shut down. The sessions that receive
+	 * this message may no longer reliably send messages to the SessionCommands	
+	 * proxy.
+	 *
+	 */
+	void shutdownInitiated();
 	/**
 	 * The debug manager process is about to shutdown.
 	 */

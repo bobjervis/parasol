@@ -481,7 +481,7 @@ class ConnectionWriter extends Writer {
  * Data read from a connection is also buffered.
  *
  * Connections are bidirectional. You may interleave reads and writes on the same connection, and may
- * have one thread reading from the connection while anotehr thread writes to the connection.
+ * have one thread reading from the connection while another thread writes to the connection.
  */
 public class Connection {
 	@Constant

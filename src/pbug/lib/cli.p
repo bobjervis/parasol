@@ -101,6 +101,7 @@ import parasol:pbuild.thisCPU;
 import parasol:rpc;
 import parasol:runtime;
 import parasol:storage;
+import parasol:text
 import parasol:thread;
 import parasol:time;
 
@@ -193,11 +194,28 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 	logger.info("Cli returning normally.");
 	return 0;
 }
+/*
+	Session cleanup:
 
+	There are at least four processes in the picture:
+		a) This cli process itself
+		b) The manager process this cli spawned to start things off
+		c) The controller process on the target machine that is monitoring the app being debugged
+		d) The app being debugged
+
+	Sending a shutdown message to the manager triggers a process to clean up all the subordinate processes.
+
+	The shutdown command to the manager from the controlling cli returns only when the controllers have all
+	shut down.
+
+		
+ */
 void cleanup() {
-	session.commands.shutdown(time.Duration.zero);
-	delete session.commands;
-	cliDone.wait();
+	logger.info("CLI cleanup")
+	result := session.commands.shutdown(time.Duration.zero)
+	logger.info("manager reported shutdown result %s", result)
+//	delete session.commands;
+	cliDone.wait()
 }
 
 void inputLoop() {
@@ -238,8 +256,18 @@ void inputLoop() {
 
 		case CodePoint:
 			logger.info("key = %s c = %x '%c'", string(key), c, c);
-			if (c == 'q')
+			switch (c) {
+			case 'q':
 				return;
+
+			case 'l':
+				logs := session.commands.getLogs(0, 1000)
+				time.Formatter formatter("yyyy/MM/dd HH:mm:ss.SSS")
+				for (i in logs) {
+					time.Date d(logs[i].timestamp, &time.UTC)
+					process.stderr.printf("%s %s\n", formatter.format(&d), logs[i].message)
+				}
+			}
 			break;
 
 		case EOF:
@@ -294,9 +322,25 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 		logger.format(at, log.INFO, "Process %d (%s) has stopped after a system exec call.", info.pid, info.label);
 	}
 
+	void killed(time.Time at, manager.ProcessInfo info, int killSig) {
+		logger.format(at, log.INFO, "!!! Process %d (%s) has terminated, killSig=%d", info.pid, info.label, killSig);
+	}
+	/**
+	 * First notification that shutdown has begun. At this point, the CLI should be prepared for imminent disconnect
+	 * from the manager.
+	 *
+	 * All calls to SessionCommands will return an error and have no effect.
+	 */
+	void shutdownInitiated() {
+		logger.info("manager notification of shutdown initiated")
+	}
+	/**
+	 * final notification of shutdown by manager
+	 */
 	void shutdown() {
-		logger.info("Manager notification of shutdown");
-		cliDone.notify();
+		logger.info("Manager notification of shutdown")
+		delete commands
+		cliDone.notify()
 	}
 }
 

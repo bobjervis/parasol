@@ -128,6 +128,7 @@ class ProcessControl implements manager.ProcessCommands, http.DisconnectListener
 			p := controlState.getProcess(i);
 			tracer.shutdown(p, timeout);
 		}
+		// Now the controller waits to hear from the expiring children
 	}
 }
 

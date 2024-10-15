@@ -428,14 +428,14 @@ public class Server {
 			_publicSocket = bindSocket(scope, _httpPort, Encryption.NONE);
 			if (_httpPort == 0)
 				_httpPort = _publicSocket.port();
-			_httpThread = new Thread();
+			_httpThread = new Thread("HTTP Accept Loop " + _httpPort);
 			_httpThread.start(startHttpEntry, this);
 		}
 		if (_secureServiceEnabled) {
 			_secureSocket = bindSocket(scope, _httpsPort, Encryption.SSLv23);
 			if (_httpsPort == 0)
 				_httpsPort = _secureSocket.port();
-			_httpsThread = new Thread();
+			_httpsThread = new Thread("HTTPS Accept Loop " + _httpsPort);
 			_httpsThread.start(startHttpsEntry, this);
 		}
 		return true;

@@ -85,20 +85,22 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 	server = new http.Server();
 	server.disableHttps();
 	server.setHttpPort(char(options.managerOption.value));
-	processControl.webSocketProtocol(PROCESS_CONTROL_PROTOCOL, new ProcessControlFactory());
-	session.webSocketProtocol(SESSION_PROTOCOL, new SessionFactory());
-	server.httpService("/proc/control", &processControl);
-	server.httpService("/session", &session);
+	processControlService.webSocketProtocol(PROCESS_CONTROL_PROTOCOL, new ProcessControlFactory());
+	sessionService.webSocketProtocol(SESSION_PROTOCOL, new SessionFactory());
+	server.httpService("/proc/control", &processControlService);
+	server.httpService("/session", &sessionService);
 	server.start(net.ServerScope.INTERNET);
 	server.wait();
+	logger.info("HTTP server shut down");
+	managedState.disconnectFromSessions();
 	logger.info("Manager returning normally.");
 	return 0;
 }
 
-http.WebSocketService processControl;
-http.WebSocketService session;
-ref<http.Server> server;
+http.WebSocketService processControlService;
+http.WebSocketService sessionService;
 
+ref<http.Server> server;
 
 SessionState sessionState;
 
@@ -130,6 +132,7 @@ class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 	 */
 	void shutdown() {
 //		managedState.unregisterController(this);
+		logger.info("=== ProcessControl === shutdown");
 	}
 
 	void processSpawned(time.Instant timestamp, int pid, string label) {
@@ -168,10 +171,12 @@ class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 
 	void killed(time.Instant timestamp, int pid, int killSig) {
 		logger.info("=== ProcessControl === Process %d killed %d", pid, killSig);
+		managedState.processKilled(this, timestamp, pid, killSig)
 	}
 
 	void newThread(time.Instant timestamp, int pid, int tid) {
 		logger.info("=== ProcessControl === Process %d new thread %d", pid, tid);
+		managedState.newThread(this, timestamp, pid, tid)
 	}
 }
 
@@ -189,7 +194,24 @@ class SessionFactory extends rpc.WebSocketFactory<SessionCommands, SessionNotifi
 	}
 }
 
-class Session implements SessionCommands, http.DisconnectListener {
+monitor class SessionVolatileData {
+	int _references
+
+	SessionVolatileData() {
+		_references = 1
+	}
+
+	void addRef() {
+		_references++
+	}
+
+	protected boolean lockedRelease() {
+		_references--
+		return _references == 0
+	}
+}
+
+class Session extends SessionVolatileData implements SessionCommands, http.DisconnectListener {
 	ref<rpc.WebSocket<SessionCommands, SessionNotifications>> socket;
 	SessionNotifications notifications;
 
@@ -203,16 +225,25 @@ class Session implements SessionCommands, http.DisconnectListener {
 	}
 
 	boolean shutdown(time.Duration timeout) {
+		// First get a stabilized list of sessions and notify them all that the manager is shutting down.
+		sessions := managedState.sessions()
+		for (i in sessions) {
+			session := sessions[i]
+			session.notifications.shutdownInitiated()
+		}
 		controllers := managedState.shutdown();
-		logger.info("shutdown called with %d,%d and %d controllers", timeout.seconds(), timeout.nanoseconds(), controllers.length());
+		logger.info("shutdown called with timeout(%d,%d) and %d controllers", timeout.seconds(), timeout.nanoseconds(), controllers.length());
 		for (i in controllers) {
 			controller := controllers[i];
 			controller.commands.shutdown(timeout);
 		}
 		result := managedState.waitForShutdown();
 		logger.info("manager waited for shutdown %s", result);
-		if (result)
+		if (result) {
+			logger.info("http server stop initiating")
 			server.stop();
+			logger.info("http server stopped")
+		}
 		return result;
 	}
 
@@ -228,4 +259,8 @@ class Session implements SessionCommands, http.DisconnectListener {
 		return managedState.getLogs(min, max);
 	}
 }
+
+void shutdownSequence(address args) {
+}
+
 

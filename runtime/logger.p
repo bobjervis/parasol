@@ -446,8 +446,9 @@ public monitor class Logger {
 	}
 
 	public void format(time.Time at, int level, string format, var... arguments) {
-		if (level < -5 || level > 5 || level == 0)
+		if (level < -5 || level > 5 || level == 0) {
 			throw IllegalArgumentException(string(level));
+		}
 		if (needToCheck(level)) {
 			string msg;
 

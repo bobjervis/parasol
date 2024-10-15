@@ -33,6 +33,7 @@ monitor class ManagedState {
 	ref<ProcessControl>[] _controllers;
 	ref<Session>[] _sessions;
 	boolean _shuttingdown;
+	ref<LogInfo>[] _logs;
 
 	// This is the session being debugged.
 
@@ -72,14 +73,8 @@ monitor class ManagedState {
 			logger.info("unregisterController from %s%s", net.dottedIP(controller.socket.socket().connection().sourceIPv4()),
 					_shuttingdown ? " shutting down" : "");
 			_controllers.remove(i);
-			if (_shuttingdown && _controllers.length() == 0) {
-				logger.info("%d sessions to shut down", _sessions.length());
-				for (i in _sessions) {
-					session := _sessions[i];
-					session.notifications.shutdown();
-				}
+			if (_shuttingdown && _controllers.length() == 0)
 				notify();
-			}
 		} else
 			logger.warn("Unexpected unregister of controller %p", controller);
 	}
@@ -101,15 +96,38 @@ monitor class ManagedState {
 		}
 	}
 
+	public ref<Session>[] sessions() {
+		ref<Session>[] result
+
+		for (i in _sessions) {
+			session := _sessions[i]
+			session.addRef()
+			result.append(session)
+		}
+		return result
+	}
+
 	public ref<ProcessControl>[] shutdown() {
 		_shuttingdown = true;
 		return _controllers;
 	}
 
 	public boolean waitForShutdown() {
-		if (_controllers.length() > 0)
+		if (_controllers.length() > 0) {
+			logger.info("manager waiting for shutdown");
 			wait();
+		}
 		return _controllers.length() == 0;
+	}
+
+	public void disconnectFromSessions() {
+		logger.info("%d sessions to shut down", _sessions.length());
+		for (i in _sessions) {
+			session := _sessions[i];
+			logger.info("%d: notifying session", i);
+			session.notifications.shutdown();
+			logger.info("%d: session notification received", i);
+		}
 	}
 
 	public void processSpawned(ref<ProcessControl> source, int pid, string label) {
@@ -129,12 +147,33 @@ monitor class ManagedState {
 			logger.error("afterExec called with unknown pid %d or wrong source", pid);
 	}
 
+	public void processKilled(ref<ProcessControl> source, time.Instant timestamp, int pid, int killSig) {
+		ps := _processes[{pid: pid, ip: source.socket.socket().connection().sourceIPv4()}];
+		if (ps != null) {
+			ps.state = ProcessState.EXITED;
+			for (i in _sessions) {
+				session := _sessions[i];
+				logger.info("sending session %d kill notification for %d", i, pid)
+				session.notifications.killed(time.Time(timestamp), *ps, killSig);
+				logger.info("session %d replied", i);
+			}
+		} else
+			logger.error("afterExec called with unknown pid %d or wrong source", pid);
+	}
+
+	public void newThread(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid) {
+		string message
+		message.printf("new thread pid %d tid %d", pid, tid);
+		log(timestamp, message)
+	}
+
 	public ManagerInfo getInfo() {
 		ManagerInfo info;
 
 		info.processCount = _processes.size();
 		info.controllerCount = _controllers.length();
 		info.sessionCount = _sessions.length();
+		info.logsCount = _logs.length();
 		return info;
 	}
 
@@ -149,9 +188,29 @@ monitor class ManagedState {
 	}
 
 	public LogInfo[] getLogs(int min, int max) {
-		LogInfo[] info;
+		LogInfo[] info
 
-		return info;
+		if (min > max || min >= _logs.length())
+			return info
+		if (max > _logs.length())
+			max = _logs.length()
+		info.resize(max - min)
+		for (int i = min; i < max; i++) {
+			li := *_logs[i]
+			info[i - min] = li
+		}
+		return info
+	}
+
+	private void log(time.Instant at, string message) {
+		li := new LogInfo
+		li.timestamp = at
+		li.message = message
+		_logs.append(li)
+	}
+
+	public boolean shuttingdown() {
+		return _shuttingdown
 	}
 }
 
