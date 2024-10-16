@@ -65,7 +65,6 @@ class WebSocketTransport extends ClientTransport {
 	ref<WebSocketVolatileData> rpcWebSocket;
 
 	~WebSocketTransport() {
-		logger.info("~WebSocketTransport");
 		delete reader;
 		delete socket;
 	}

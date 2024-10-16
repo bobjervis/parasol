@@ -121,6 +121,8 @@ int PROC_STAT_COLUMNS		= 44;	// expected number of columns of data to be reporte
 ref<Terminal> terminal;
 ref<Panel> mainWindow;
 ref<Monitor> cliDone;
+string managerUrl
+boolean shuttingDown
 
 public int run(ref<debug.PBugOptions> options, string exePath, string... arguments) {
 	cmdLine := process.getCommandLine();
@@ -157,9 +159,9 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 		return 1;
 	}
 	thread.sleep(100);
-	url := "ws://" + net.dottedIP(net.hostIPv4()) + ":" + string(managerPort) + "/session";
-	if (!connectToManager(url)) {
-		printf("Cannot connect to manager at %s\n", url);
+	managerUrl = "ws://" + net.dottedIP(net.hostIPv4()) + ":" + string(managerPort) + "/session";
+	if (!connectToManager(managerUrl)) {
+		printf("Cannot connect to manager at %s\n", managerUrl);
 		return 1;
 	}
 	
@@ -212,6 +214,7 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
  */
 void cleanup() {
 	logger.info("CLI cleanup")
+	shuttingDown = true
 	result := session.commands.shutdown(time.Duration.zero)
 	logger.info("manager reported shutdown result %s", result)
 //	delete session.commands;
@@ -315,7 +318,13 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 
 	void disconnect(boolean normalClose) {
 		logger.debug("SessionNotifications downstream disconnect, normal close? %s", string(normalClose));
-		// Should probably try to reconnect if close is not normal. - Or does the cli include a reconnect command?
+		if (shuttingDown)
+			cliDone.notify()
+		else {
+			ok := connectToManager(managerUrl)
+			if (!ok)
+				logger.error("Could not reconnect to manager at %s", managerUrl)
+		}
 	}
 
 	void afterExec(time.Time at, manager.ProcessInfo info) {
@@ -339,8 +348,6 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 	 */
 	void shutdown() {
 		logger.info("Manager notification of shutdown")
-		delete commands
-		cliDone.notify()
 	}
 }
 

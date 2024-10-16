@@ -124,10 +124,11 @@ monitor class ManagedState {
 		logger.info("%d sessions to shut down", _sessions.length());
 		for (i in _sessions) {
 			session := _sessions[i];
-			logger.info("%d: notifying session", i);
 			session.notifications.shutdown();
-			logger.info("%d: session notification received", i);
 		}
+//		for (i in _sessions)
+//			delete _sessions[i].notifications
+		_sessions.clear()
 	}
 
 	public void processSpawned(ref<ProcessControl> source, int pid, string label) {
