@@ -75,7 +75,7 @@ class WebSocketTransport extends ClientTransport {
 			rpcWebSocket.waitForDisconnect();
 			ws := rpcWebSocket;
 			rpcWebSocket = null;
-			ws.unrefer();			// This WebSocketTransport is embedded as a member of rpcWebSocket.
+			ws.release();			// This WebSocketTransport is embedded as a member of rpcWebSocket.
 		}
 	}
 
@@ -107,7 +107,7 @@ class WebSocketTransport extends ClientTransport {
 				shouldThrow = true;
 		}
 		delete r;
-		rpcWebSocket.unrefer();
+		rpcWebSocket.release();
 		if (shouldThrow)
 			throw IOException("Connection closed before reply");
 		return s;
@@ -559,7 +559,7 @@ class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader
 				ref<http.Rendezvous>[] pending = _transport.manager.extractAllRendezvous();
 				for (int i = 0; i < pending.length(); i++)
 					pending[i].abandon();
-				_transport.rpcWebSocket.unrefer();
+				_transport.rpcWebSocket.release();
 				return sawClose;
 			}
 		}
@@ -594,7 +594,7 @@ class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader
 		string reply;
 		reply.printf("R%s%s", substring(&cp.message[1], index), returns);
 		_transport.socket.write(reply);
-		_transport.rpcWebSocket.unrefer();
+		_transport.rpcWebSocket.release();
 		delete cp;
 	}
 }

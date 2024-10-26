@@ -25,6 +25,7 @@ public enum Key {
 	NOT_A_KEY,
 	EOF,
 	CodePoint,
+	WindowSizeChanged,
 	F1,					// interecepted by Gnome, raw mode does not see it.
 	F2,
 	F3,
@@ -69,6 +70,7 @@ enum ButtonState {
 }
 
 public class Terminal {
+	private linux.struct_sigaction oldWinchAction;
 	private linux.termios _termiosOriginal;
 	private linux.termios _termiosRaw;
 	private int _oldKbMode;
@@ -94,6 +96,7 @@ public class Terminal {
 		linux.cfmakeraw(&_termiosRaw);
 		_inputState = &rootState;
 		_dblClickExpiration = time.Time.MIN_VALUE;
+		linux.sigaction(linux.SIGWINCH, null, &oldWinchAction);
 	}
 
 	~Terminal() {
@@ -109,10 +112,16 @@ public class Terminal {
 
 	public boolean switchToRaw() {
 		linux.ioctl(_fdi, KDSKBMODE, K_RAW);
+		linux.struct_sigaction newWinchAction;
+
+		newWinchAction.set_sa_sigaction(sigWinchHandler);
+		newWinchAction.sa_flags = linux.SA_SIGINFO;
+		linux.sigaction(linux.SIGWINCH, &newWinchAction, null);
 		return _inRaw = linux.tcsetattr(_fdi, linux.TCSAFLUSH, &_termiosRaw) == 0;
 	}
 
 	public boolean switchToCooked() {
+		linux.sigaction(linux.SIGWINCH, &oldWinchAction, null);
 		linux.ioctl(_fdi, KDSKBMODE, _oldKbMode);
 		b := linux.tcsetattr(_fdi, linux.TCSAFLUSH, &_termiosOriginal) == 0;
 		if (b)
@@ -122,6 +131,24 @@ public class Terminal {
 
 	public boolean inRaw() {
 		return _inRaw;
+	}
+
+	private static Monitor sizeChangedLock;
+	private static boolean sizeChanged;
+
+	static void sigWinchHandler(int signum, ref<linux.siginfo_t> info, ref<linux.ucontext_t> uContext) {
+		lock (sizeChangedLock) {
+			sizeChanged = true
+		}
+	}
+
+	public boolean windowSizeChanged() {
+		boolean changedFlag
+		lock (sizeChangedLock) {
+			changedFlag = sizeChanged
+			sizeChanged = false
+		}
+		return changedFlag
 	}
 	/**
 	 * Get the window size in characters
@@ -149,6 +176,10 @@ public class Terminal {
 		send("\x1b[?1003l");
 	}
 
+	public void gotoStartOfLine() {
+		send("\r")
+	}
+
 	private void send(string s) {
 		linux.write(_fdo, s.c_str(), s.length());
 	}
@@ -161,9 +192,14 @@ public class Terminal {
 		}
 		int c;
 
+		if (windowSizeChanged())
+			return Key.WindowSizeChanged, 0
 		actual := linux.read(_fdi, &c, 1);
 		if (actual == 0)
 			return Key.EOF, 0;
+
+		if (actual < 0)
+			return Key.NOT_A_KEY, linux.errno()
 		
 //		printf("c = %x '%c'\r\n", c, c);
 

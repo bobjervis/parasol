@@ -98,7 +98,7 @@ import parasol:pbuild.Application;
 import parasol:pbuild.Coordinator;
 import parasol:pbuild.thisOS;
 import parasol:pbuild.thisCPU;
-import parasol:rpc;
+import parasol:rpc
 import parasol:runtime;
 import parasol:storage;
 import parasol:text
@@ -188,6 +188,20 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 	directoryOutline := upperTier.left();
 	sourceFile := upperTier.next();
 
+	processes := session.commands.getProcesses()
+	if (processes.length() > 0) {
+		for (i in processes) {
+			p := &processes[i]
+			switch (p.state) {
+			case STOPPED:
+				process.stderr.printf("Process %d (%s) has stopped.\r\n", p.pid, p.label)
+
+			default:
+				logger.info("Process %d (%s) in state %s exit status %d.", p.pid, p.label, string(p.state), p.exitStatus)
+			}
+		}
+	} else
+		logger.info("No processes to report.")
 	logger.info("Starting input loop");
 	inputLoop();
 
@@ -217,7 +231,6 @@ void cleanup() {
 	shuttingDown = true
 	result := session.commands.shutdown(time.Duration.zero)
 	logger.info("manager reported shutdown result %s", result)
-//	delete session.commands;
 	cliDone.wait()
 }
 
@@ -229,7 +242,7 @@ void inputLoop() {
 		(key, c) = terminal.getKeystroke();
 		switch (key) {
 		case NOT_A_KEY:
-//			printf("NOT_A_KEY %d - ", c);
+//			logger.info("NOT_A_KEY %d", c);
 			break;
 
 		case MouseClick:
@@ -268,17 +281,25 @@ void inputLoop() {
 				time.Formatter formatter("yyyy/MM/dd HH:mm:ss.SSS")
 				for (i in logs) {
 					time.Date d(logs[i].timestamp, &time.UTC)
-					process.stderr.printf("%s %s\n", formatter.format(&d), logs[i].message)
+					process.stderr.printf("%s %s\r\n", formatter.format(&d), logs[i].message)
 				}
+				break
+
+			case 'R':
+				if (session.commands.resumeProcess(0, 0))
+					process.stderr.printf("Process resumed\r\n")
+				else
+					process.stderr.printf("Process not resumed\r\n")
+				break
 			}
 			break;
 
 		case EOF:
-			logger.info("key = %s c = %x '%c'", string(key), c, c);
+			logger.info("key = EOF");
 			return;
 
 		default:
-			logger.info("key = %d c = %x", int(key), c);
+			logger.info("key = %s c = %x - ignored", string(key), c);
 		}
 	}
 }
@@ -295,6 +316,7 @@ void setTerminal() {
 	if (!terminal.switchToRaw())
 		printf("Terminal not reset to cooked\r\n");
 	terminal.enableMouseTracking();
+	terminal.gotoStartOfLine();
 }
 
 boolean connectToManager(string url) {
@@ -329,6 +351,11 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 
 	void afterExec(time.Time at, manager.ProcessInfo info) {
 		logger.format(at, log.INFO, "Process %d (%s) has stopped after a system exec call.", info.pid, info.label);
+		process.stderr.printf("Process %d (%s) has stopped after a system exec call.\r\n", info.pid, info.label);
+	}
+
+	void exitCalled(time.Time at, manager.ProcessInfo info, int tid, int exitStatus) {
+		logger.format(at, log.INFO, "Process %d (%s), tid %d has called exit with exit status %d.", info.pid, info.label, tid, exitStatus)
 	}
 
 	void killed(time.Time at, manager.ProcessInfo info, int killSig) {
@@ -686,19 +713,6 @@ class Notifier implements debug.Notifier {
 
 	void newThread(int pid, int tid) {
 		logger.info("    -> process %d new thread %d", pid, tid);
-	}
-}
-
-class RunProcess extends debug.SessionWorkItem {
-	ref<debug.TracedProcess> _process;
-
-	RunProcess(ref<debug.TracedProcess> process) {
-		_process = process;
-	}
-
-	void run() {
-		if (!_process.runAllThreads())
-			printf("Process %d cannot be run.\n", _process.id());
 	}
 }
 

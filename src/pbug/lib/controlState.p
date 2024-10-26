@@ -102,6 +102,15 @@ monitor class ControlState {
 			return null;
 	}
 
+	public ref<TracedProcess> findProcess(int pid) {
+		for (i in _processes) {
+			p := _processes[i]
+			if (p.id() == pid)
+				return p
+		}
+		return null
+	}	
+
 	public boolean removeProcess(ref<TracedProcess> process) {
 		for (i in _processes) {
 			if (_processes[i] == process) {

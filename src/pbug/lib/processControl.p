@@ -34,7 +34,7 @@ public interface ProcessNotifications {
 
 	void processSpawned(time.Instant timestamp, int pid, string label);
 
-	void exit(time.Instant timestamp, int pid, int exitStatus);
+	void exit(time.Instant timestamp, int pid, int tid, int exitStatus);
 
 	void initialStop(time.Instant timestamp, int pid);
 
@@ -46,7 +46,7 @@ public interface ProcessNotifications {
 
 	void afterExec(time.Instant timestamp, int pid);
 
-	void exitCalled(time.Instant timestamp, int pid);
+	void exitCalled(time.Instant timestamp, int pid, int tid, int exitStatus);
 
 	void killed(time.Instant timestamp, int pid, int killSig);
 
@@ -63,4 +63,13 @@ public interface ProcessCommands {
 	 * down.
 	 */
 	void shutdown(time.Duration timeout);
+	/**
+	 * Resume execution of the named process.
+	 *
+	 * @param pid The process id of the process to be resumed.
+ 	 * @return true if the resume operation was successful, false if the process
+	 * either does not exist or has changed state in a way that makes this
+	 * command disallowed.
+	 */
+	boolean resumeProcess(int pid)
 }

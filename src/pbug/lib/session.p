@@ -31,6 +31,8 @@ public interface SessionNotifications {
 	 * @param info a ProcessInfo object describing the process that stopped.
 	 */
 	void afterExec(time.Time at, ProcessInfo info);
+
+	void exitCalled(time.Time at, ProcessInfo info, int tid, int exitStatus);
 	/**
 	 * The process described in the info has terminated.
 	 *
@@ -69,10 +71,16 @@ public interface SessionCommands {
 	ManagerInfo getManagerInfo();
 
 	ProcessInfo[] getProcesses();
+
+	ThreadInfo[] getThreads(int pid, unsigned ip)
 	/**
 	 * Collect oneor more logs
 	 */
-	LogInfo[] getLogs(int min, int max);
+	LogInfo[] getLogs(int min, int max)
+
+	// Actions
+
+	boolean resumeProcess(int pid, unsigned ip)
 }
 
 public class ProcessInfo {
@@ -80,6 +88,13 @@ public class ProcessInfo {
 	public unsigned ip;
 	public string label;
 	public ProcessState state;
+	public int exitStatus;
+}
+
+public class ThreadInfo {
+	public int tid
+	public ProcessState state
+	public int exitStatus
 }
 
 public enum ProcessState {

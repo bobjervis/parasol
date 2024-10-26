@@ -637,29 +637,59 @@ public class Monitor {
 // I'd like to be able to 'rope-off' a set of members and/or methods such that they
 // behave like they're in a monitor class, but let other members and methods live a
 // looser existence. I want to control when a lock on the 'this' object is taken
-// and somtimes release it like in the case of 'unrefer' below.
+// and sometimes release it like in the case of 'release' below.
 private monitor class RefCountedBase {
 }
-
+/**
+ * RefCounted provides a basic facility for providing a simple garbage collection
+ * scheme.
+ *
+ * Every ref-counted object has an integer count. The strategy is that the programmer 
+ * is responsible for deciding when a new permanent 'reference' is created and when one
+ * is removed. When you create a ref-counted object, there is one 'reference' in existence, 
+ * typically the local variable where you stored the return value of new.
+ *
+ * When the last reference is about to end its lifetime, you must call {@link release}
+ * to notify the object. The last call to release will delete the object.
+ *
+ * There are both pros and cons of using ref-counted objects. It is a relatively efficient
+ * way of sharing certain kinds of data structures across a complex program. The chief
+ * weakness of ref-counting objects is that if your ref-counted objects contain references
+ * to other ref-counted objects that form reference cycles, your data structures may leak
+ * memory.
+ *
+ * A simple example of this is a doubly-linked list. As long as there is more than one
+ * element in the list, then releasing all references outside the list itself is not enough 
+ * to cause the elements themselves to be deleted.
+ *
+ * This means that for cyclic data structures the programmer must figure out a way to
+ * break any cycles to ensure that a delete operation is complete. In the example of a
+ * doubly linked list, if you simple walk forward through the list, releasing all previous 
+ * pointers (but not erasing the actual values stored there), then use those links to walk backward
+ * but this time releasing all the next pointers. By the time you reach the front of the list
+ * and release the final next reference
+ * the only elements left will be elements directly pointed at from outside the list.
+ *
+ */
 public class RefCounted extends RefCountedBase {
 	private int _refCount;
-
+	/**
+	 * Add a reference to an object.
+	 */
 	public void refer() {
 		lock(*this) {
 			_refCount++;
 		}
-//		printf("%p.refer() -> %d\n%s", this, _refCount, runtime.stackTrace());
 	}
 	/**
 	 * This method may delete the object being called, so never count on the object being
 	 * alive after a call to release.
 	 */
-	public void unrefer() {
+	public void release() {
 		boolean timeToDelete;
 
 		lock (*this) {
 			_refCount--;
-//			printf("%p.release() -> %d\n%s", this, _refCount, runtime.stackTrace());
 			if (_refCount < 0)
 				timeToDelete = true;
 		}
@@ -676,7 +706,7 @@ public class RefCounted extends RefCountedBase {
 /*
 I'd like to write (this is also safer as _refCount is truly protected):
 public monitor class RefCounted {
-	monitor {
+	monitor (
 		private int _refCount;
 	
 		public void refer() {
@@ -686,12 +716,12 @@ public monitor class RefCounted {
 		public int references() {
 			return _refCount + 1;
 		}
-	}
+	)
 
-	public void unrefer() {
+	public void release() {
 		boolean timeToDelete;
 
-		lock (*this) {
+		lock (this) {
 			_refCount--;
 			if (_refCount < 0)
 				timeToDelete = true;

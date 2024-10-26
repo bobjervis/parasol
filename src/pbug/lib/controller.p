@@ -130,6 +130,17 @@ class ProcessControl implements manager.ProcessCommands, http.DisconnectListener
 		}
 		// Now the controller waits to hear from the expiring children
 	}
+
+	boolean resumeProcess(int pid) {
+		p := controlState.findProcess(pid)
+		if (p == null) {
+			logger.warn("No process in this controller, pid %d", pid)
+			return false
+		}
+		tracer.perform(new RunProcess(p))
+		return true
+	}
+
 }
 
 public void spawnApplication(string name, string exePath, string... arguments) {
@@ -190,5 +201,19 @@ class SpawnParasolScript extends TracerWorkItem {
 		}
 	}
 }
+
+class RunProcess extends TracerWorkItem {
+	ref<TracedProcess> _process;
+
+	RunProcess(ref<TracedProcess> process) {
+		_process = process;
+	}
+
+	void run() {
+		if (!_process.runAllThreads())
+			printf("Process %d cannot be run.\n", _process.id());
+	}
+}
+
 
 

@@ -1428,10 +1428,10 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Node> name = tree.newLeaf(Operator.THIS, loc);
 			ref<Node> call = tree.newCall(fromStringMethod, CallCategory.FUNCTION_CALL, name, args, loc, compileContext);
 			call.type = eit;
-			ref<Node> vr = tree.newReference(v, 0, false, loc);
+			ref<Node> vr = tree.newReference(v, int(offset), false, loc);
+			vr.type = t;
 			ref<Node> asg = tree.newBinary(Operator.ASSIGN, vr, call, loc);
 			block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
-
 			}
 			break;
 

@@ -293,7 +293,7 @@ public enum DebugEvent {
 	UNEXPECTED,
 	/** Not a notification from the controlled process, but the wait was interrupted in this process */
 	INTERRUPTED,
-	/** The controlled process is about to exit - normally if signal is zero, abnormally if not. */
+	/** The a thread in the controlled process is about to exit - normally if signal is zero, abnormally if not. */
 	EXIT_CALLED,
 	/** The controlled process exited normally. */
 	EXIT,
@@ -370,7 +370,7 @@ public class Tracer {
 	 * This is appropriate in response to a EXIT_CALLED, EXIT or KILLED event to fetch the exit
 	 * status and any signal responsible for the termination.
 	 *
-	 * @param tid The thead id of the thread receiving the event.
+	 * @param tid The thread id of the thread receiving the event.
 	 *
 	 * @return The exit status of the terminating process or thread, or zero if a signal caused abonormal termination.
 	 * @return If not zero, this is the signal number causing the (abnormal) termination event. For normal

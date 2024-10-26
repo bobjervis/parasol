@@ -137,11 +137,12 @@ class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 
 	void processSpawned(time.Instant timestamp, int pid, string label) {
 		logger.info("=== ProcessControl === Process %d '%s' spawned", pid, label);
-		managedState.processSpawned(this, pid, label);
+		managedState.processSpawned(this, timestamp, pid, label);
 	}
 
-	void exit(time.Instant timestamp, int pid, int exitStatus) {
-		logger.info("=== ProcessControl === Process %d exited %d", pid, exitStatus);
+	void exit(time.Instant timestamp, int pid, int tid, int exitStatus) {
+		logger.info("=== ProcessControl === Process %d Thread %d exited %d", pid, tid, exitStatus);
+		managedState.exit(this, timestamp, pid, tid, exitStatus)
 	}
 
 	void initialStop(time.Instant timestamp, int pid) {
@@ -165,8 +166,9 @@ class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 		managedState.afterExec(this, timestamp, pid);
 	}
 
-	void exitCalled(time.Instant timestamp, int pid) {
-		logger.info("=== ProcessControl === Process %d exit called", pid);
+	void exitCalled(time.Instant timestamp, int pid, int tid, int exitStatus) {
+		logger.info("=== ProcessControl === Process %d thread %d exit called with status %d", pid, tid, exitStatus);
+		managedState.exitCalled(this, timestamp, pid, tid, exitStatus);
 	}
 
 	void killed(time.Instant timestamp, int pid, int killSig) {
@@ -257,6 +259,29 @@ class Session extends SessionVolatileData implements SessionCommands, http.Disco
 
 	LogInfo[] getLogs(int min, int max) {
 		return managedState.getLogs(min, max);
+	}
+
+	ThreadInfo[] getThreads(int pid, unsigned ip) {
+		ThreadInfo[] info
+
+		p := managedState.getProcess(pid, ip)
+		if (p == null) {
+			logger.warn("no process matched pid %d ip %s", pid, net.dottedIP(ip))
+			return info
+		}
+		logger.info("threads not recorded for pid %d ip %s", pid, net.dottedIP(ip))
+		return info
+	}
+
+	boolean resumeProcess(int pid, unsigned ip) {
+		// TODO: stabilize this object, add a ref count
+		// obtain this under a lock
+		p := managedState.getProcess(pid, ip)
+		if (p == null) {
+			logger.warn("no process matched pid %d ip %s", pid, net.dottedIP(ip))
+			return false
+		}
+		return p.source().commands.resumeProcess(p.pid)
 	}
 }
 

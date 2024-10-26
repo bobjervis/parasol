@@ -131,9 +131,10 @@ monitor class ManagedState {
 		_sessions.clear()
 	}
 
-	public void processSpawned(ref<ProcessControl> source, int pid, string label) {
+	public void processSpawned(ref<ProcessControl> source, time.Instant timestamp, int pid, string label) {
 		ps := new ProcessInfoInternal(source, pid, label);
 		_processes[{pid: pid, ip: source.socket.socket().connection().sourceIPv4()}] = ps;
+		log(timestamp, "process pid %d spawned '%s'", pid, label)
 	}
 
 	public void afterExec(ref<ProcessControl> source, time.Instant timestamp, int pid) {
@@ -144,6 +145,20 @@ monitor class ManagedState {
 				session := _sessions[i];
 				session.notifications.afterExec(time.Time(timestamp), *ps);
 			}
+			log(timestamp, "after exec pid %d state %s", pid, string(ps.state))
+		} else
+			logger.error("afterExec called with unknown pid %d or wrong source", pid);
+	}
+
+	public void exitCalled(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid, int exitStatus) {
+		ps := _processes[{pid: pid, ip: source.socket.socket().connection().sourceIPv4()}];
+		if (ps != null) {
+			ps.state = ProcessState.EXIT_CALLED;
+			for (i in _sessions) {
+				session := _sessions[i];
+				session.notifications.exitCalled(time.Time(timestamp), *ps, tid, exitStatus);
+			}
+			log(timestamp, "exit called pid %d tid %d exit status %d", pid, tid, exitStatus)
 		} else
 			logger.error("afterExec called with unknown pid %d or wrong source", pid);
 	}
@@ -163,9 +178,12 @@ monitor class ManagedState {
 	}
 
 	public void newThread(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid) {
-		string message
-		message.printf("new thread pid %d tid %d", pid, tid);
-		log(timestamp, message)
+		log(timestamp, "new thread pid %d tid %d", pid, tid)
+	}
+
+
+	public void exit(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid, int exitStatus) {
+		log(timestamp, "thread exit pid %d tid %d status %d", pid, tid, exitStatus)
 	}
 
 	public ManagerInfo getInfo() {
@@ -183,6 +201,8 @@ monitor class ManagedState {
 
 		for (i in _processes) {
 			p := _processes[i];
+			logger.info("get %d at %s (%s) state %s", p.pid, net.dottedIP(p.ip), p.label, string(p.state))
+			p.exitStatus = -73
 			info.append(*p);
 		}
 		return info;
@@ -203,7 +223,9 @@ monitor class ManagedState {
 		return info
 	}
 
-	private void log(time.Instant at, string message) {
+	private void log(time.Instant at, string format, var... args) {
+		string message
+		message.printf(format, args)
 		li := new LogInfo
 		li.timestamp = at
 		li.message = message
@@ -212,6 +234,24 @@ monitor class ManagedState {
 
 	public boolean shuttingdown() {
 		return _shuttingdown
+	}
+
+	public ref<ProcessInfoInternal> getProcess(int pid, unsigned ip) {
+		if (pid == 0) {
+			if (ip == 0) {
+				if (_processes.size() == 1) {
+					// use an iterator to find the one process without knowing it's identity
+					for (i in _processes)
+						return _processes[i]
+				}
+			}
+		}
+		for (i in _processes) {
+			p := _processes[i];
+			if (p.pid == pid && p.ip == ip)
+				return p
+		}
+		return null
 	}
 }
 
@@ -223,9 +263,14 @@ class ProcessInfoInternal extends ProcessInfo {
 		this.state = ProcessState.RUNNING;
 		this.pid = pid;
 		this.label = label;
+		logger.info("new %d (%s)", pid, label)
 	}
 
 	public boolean spawnedBy(ref<ProcessControl> source) {
 		return source == _source;
+	}
+
+	public ref<ProcessControl> source() {
+		return _source
 	}
 }

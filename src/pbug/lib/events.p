@@ -66,6 +66,7 @@ class Events {
 		if (_events != null) {
 			id := _events.id();
 			_events.join();
+			_events = null
 			logger.info("events thread id %d collected", id);
 		} else
 			logger.info("no events thread to collect");
@@ -167,7 +168,7 @@ private void eventsHandler(address unused) {
 			if (p.reportExit(tid, extra)) {
 				n = controlState.notifier();
 				if (n != null)
-					n.exit(now, p.id(), extra);
+					n.exit(now, p.id(), tid, extra);
 			}
 			break;
 
@@ -575,7 +576,6 @@ public class ThreadInfo {
 		_exitCode = exitCode;
 		_state = manager.ProcessState.EXITED;		// 
 		_stopSig = 0;
-		logger.info("   process %d exited", _process.id());
 	}
 
 	void reportExitCalled() {
@@ -590,12 +590,9 @@ public class ThreadInfo {
 			_state = manager.ProcessState.EXITED;
 			_exitCode = -linux.SIGKILL;
 			_process.reportKilled(linux.SIGKILL);
-			logger.info("   process %d terminated by SIGKILL", _process.id());
 			return false;
-		} else {
-			logger.info("   process %d exit called status %d termination signal %d", _process.id(), _exitCode, _stopSig);
+		} else
 			return true;
-		}
 	}
 
 	boolean reportStopped(int signal) {
@@ -887,7 +884,7 @@ class ExitCalled extends TracerWorkItem {
 		n := controlState.notifier();
 		if (_thread.fetchExitCalledInfo()) {
 			if (n != null)
-				n.exitCalled(_now, _thread.process().exitStatus());
+				n.exitCalled(_now, _thread.process().id(), _thread.tid(), _thread.process().exitStatus());
 			_thread.run();					// Clean itself up.
 		} else {
 			if (n != null) {

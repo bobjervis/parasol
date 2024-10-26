@@ -68,6 +68,8 @@ interface Test {
 
 interface WSUpstream {
 	string get(string query);
+
+	TestA testA();
 }
 
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
@@ -94,10 +96,27 @@ class ServerWork implements WSUpstream, http.DisconnectListener {
 		return "I got: " + query;
 	}
 
+	TestA testA() {
+		TestA a;
+
+		a.field = TestEnum.THIRD;
+		return a;
+	}
+
 	void disconnect(boolean normalClose) {
 		logger.debug("upstream disconnect, normal close? %s", string(normalClose));
 		upstreamDisconnect = true;
 	}
+}
+
+enum TestEnum {
+	FIRST,
+	SECOND,
+	THIRD
+}
+
+class TestA {
+	TestEnum field;
 }
 
 interface WSDownstream {
@@ -146,6 +165,8 @@ class ClientWork implements WSDownstream, http.DisconnectListener {
 		s += "More goo ";
 	assert(up.get(s) == "I got: " + s);
 
+	a := up.testA();
+	assert(a.field == TestEnum.THIRD);
 	delete up;
 }
 assert(downstreamDisconnect);
