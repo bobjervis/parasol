@@ -58,16 +58,22 @@ class Create extends process.Command {
 					"If a path to a directory that can be created is given, but does not exist, the " +
 					"directory is created. " +
 					"");
+		permissiveOption = booleanOption('p', "permissive", "Do not report an error if the context already exists.")
 	}
+	ref<process.Option<boolean>> permissiveOption 
 
 	public int main(string[] args) {
 		if (!context.validateContextName(args[0])) {
 			printf("The first argument must be a validly formatted context name, found '%s'\n", args[0]);
 			return 1;
 		}
-		if (context.get(args[0]) != null) {
-			printf("Context '%s' already exists\n", args[0]);
-			return 1;
+		boolean exists, permitted
+		(exists, permitted) = contextExists(args[0])
+		if (exists) {
+			if (permitted)
+				return 0
+			else
+				return 1
 		}
 		if (args.length() == 1) {
 			ref<context.Context> ctx = context.create(args[0]);
@@ -95,6 +101,21 @@ class Create extends process.Command {
 		}
 		return 0;
 	}
+
+	boolean, boolean contextExists(string name) {
+		existing := context.get(name)
+		if (existing != null) {
+			if (permissiveOption.set()) {
+				printf("Context '$s' already exists\n", name)
+				return true, true
+			} else {
+				printf("Counld not create context '%s' - one by that name already exists\n", name)
+				return true, false
+			}
+		} else
+			return false, false
+	}
+	
 }
 
 class Ls extends process.Command {
