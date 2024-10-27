@@ -106,7 +106,7 @@ class Create extends process.Command {
 		existing := context.get(name)
 		if (existing != null) {
 			if (permissiveOption.set()) {
-				printf("Context '$s' already exists\n", name)
+				printf("Context '%s' already exists\n", name)
 				return true, true
 			} else {
 				printf("Counld not create context '%s' - one by that name already exists\n", name)
