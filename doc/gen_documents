@@ -28,7 +28,13 @@ cd $PARASOL_HOME
 pbuild
 pcontext create -p docs
 export PARASOL_CONTEXT=docs
-pcontext install build/build_parasollanguage.org
-pcontext install build/debug_parasollanguage.org
+if ! ( pcontext install build/build_parasollanguage.org )
+then
+	echo Installation failed for build:parasollanguage.org - ignoring
+fi
+if ! ( pcontext install build/debug_parasollanguage.org )
+then
+    echo Installation failed for debug:parasollanguage.org - ignoring
+fi
 paradoc -c $PARASOL_HOME/doc/parasol -h Parasol $1 core:parasollanguage.org build:parasollanguage.org debug:parasollanguage.org
 
