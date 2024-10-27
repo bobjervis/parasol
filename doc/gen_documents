@@ -26,7 +26,7 @@ then
 fi
 cd $PARASOL_HOME
 pbuild
-pcontext create docs
+pcontext create -p docs
 export PARASOL_CONTEXT=docs
 pcontext install build/build_parasollanguage.org
 pcontext install build/debug_parasollanguage.org
