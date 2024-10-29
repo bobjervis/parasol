@@ -153,6 +153,10 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 	manArgs.append(string(managerPort));
 	socket.close();
 	delete socket;
+	if (options.scriptOption.set()) {
+		manArgs.append("-s")
+		manArgs.append(options.scriptOption.value)
+	}
 	manArgs.append(options.copiedOptions());
 	if (!manager.spawn(cmdLine[0], manArgs)) {
 		printf("Spawn of manager sub-process failed\n");
@@ -356,6 +360,7 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 
 	void exitCalled(time.Time at, manager.ProcessInfo info, int tid, int exitStatus) {
 		logger.format(at, log.INFO, "Process %d (%s), tid %d has called exit with exit status %d.", info.pid, info.label, tid, exitStatus)
+		process.stderr.printf("Process %d, thread %d has called exit with status %d.\r\n", info.pid, tid, exitStatus)
 	}
 
 	void killed(time.Time at, manager.ProcessInfo info, int killSig) {

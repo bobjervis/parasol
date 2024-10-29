@@ -93,7 +93,17 @@ public int main(string[] args) {
 	}
 	arguments := pbugCommand.finalArguments();
 	string exePath;
-	if (pbugCommand.options.applicationOption.set()) {
+	scriptPath := pbugCommand.options.scriptOption.value
+	if (pbugCommand.options.scriptOption.set()) {
+		if (pbugCommand.options.applicationOption.set()) {
+			printf("FAIL: Cannot specify both a script and application option.\n")
+			return 1
+		}
+		if (!storage.exists(scriptPath)) {
+			printf("FAIL: specified script file %s does not exist.\n", scriptPath)
+			return 1
+		}
+	} else if (pbugCommand.options.applicationOption.set()) {
 		// This is all kind of gross. 
 		pbuild.BuildOptions buildOptions;
 		buildOptions.buildFileOption = process.Command.defaultStringOption();

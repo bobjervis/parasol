@@ -19,6 +19,8 @@ import parasol:debug;
 import parasol:thread;
 import parasol:time;
 
+import parasollanguage.org:debug.manager
+
 Tracer tracer;
 
 class Tracer extends debug.Tracer {
@@ -36,10 +38,6 @@ class Tracer extends debug.Tracer {
 			_tracerThread.join();
 			delete _tracerThread;
 		}
-	}
-
-	public void shutdown(ref<TracedProcess> process, time.Duration timeout) {
-		perform(new Shutdown(process, timeout == time.Duration.zero));
 	}
 
 	void perform(ref<TracerWorkItem> item) {
@@ -95,6 +93,15 @@ class Shutdown extends TracerWorkItem {
 	}
 
 	void run() {
+		if (_process.state() == manager.ProcessState.EXIT_CALLED) {
+			threads := _process.getThreads()
+			// Resume all the 'exit_called' threads, if any are pending
+			for (i in threads) {
+				t := threads[i]
+				if (t.state() == manager.ProcessState.EXIT_CALLED)
+					t.run()
+			}
+		}
 		if (_kill)
 			_process.kill();
 		else

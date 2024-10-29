@@ -120,15 +120,7 @@ class ProcessControl implements manager.ProcessCommands, http.DisconnectListener
 
 	void shutdown(time.Duration timeout) {
 		logger.info("Controller shutdown called with %d processes active", controlState.processCount());
-		count := controlState.processCount();
-
-		// This has a race when there are lots of dynamically created processes under this controller.
-		// Is that a scenario needed any time soon?
-		for (int i = 0; i < count; i++) {
-			p := controlState.getProcess(i);
-			tracer.shutdown(p, timeout);
-		}
-		// Now the controller waits to hear from the expiring children
+		controlState.shutdown(timeout)
 	}
 
 	boolean resumeProcess(int pid) {

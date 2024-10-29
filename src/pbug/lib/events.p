@@ -885,7 +885,7 @@ class ExitCalled extends TracerWorkItem {
 		if (_thread.fetchExitCalledInfo()) {
 			if (n != null)
 				n.exitCalled(_now, _thread.process().id(), _thread.tid(), _thread.process().exitStatus());
-			_thread.run();					// Clean itself up.
+			//_thread.run();					// Clean itself up.
 		} else {
 			if (n != null) {
 				n.killed(_now, _thread.process().id(), _thread.process().killSig());

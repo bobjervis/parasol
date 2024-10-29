@@ -323,6 +323,15 @@ performs many different functions.
       directory will be used to hold any newly installed packages or other
       updated information. If a path to a directory that can be created is
       given, but does not exist, the directory is created.
+
+<h4>Options:</h4>
+
+<table>
+<tr><td>-p</td><td>--permissive</td><td>
+    If present, this option will cause the command to succeed if the indicated
+	context already exists. Otherise, the command fails if the context
+	exists.
+</td></tr>
 </div>
 
 {@code
@@ -347,7 +356,6 @@ performs many different functions.
 	
 	<p>
       List all contexts.
-</div>
 	
 	<h4>Options:</h4>
 
@@ -355,6 +363,7 @@ performs many different functions.
 	<tr><td>-p</td><td>--packages</td><td>If present, list the packages present in each context.</td><tr>
 	<tr><td>-v</td><td>--versions</td><td>If present, list the packages and their versions present in each context.</td><tr>
 	</table>
+</div>
 
 <h3>{@level 3 paradoc}</h3>
 

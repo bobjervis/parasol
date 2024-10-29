@@ -25,6 +25,7 @@ public class PBugOptions {
 	public ref<process.Option<int>> processOption;
 	public ref<process.Option<string>> joinOption;
 	public ref<process.Option<string>> controlOption;
+	public ref<process.Option<string>> scriptOption;
 	public ref<process.Option<int>> managerOption;
 	public ref<process.Option<boolean>> verboseOption;
 	public ref<process.Option<boolean>> elisionOption;
@@ -42,9 +43,13 @@ public class PBugOptions {
 					"Designates the path for the build file. " +
 					"If no -a or ---application option is included as well, this option has no effect. " +
 					"If this option is provided, only this one build script will be loaded and searched. " +
-					"Default: Apply the search algorithm described below.");
+					"Default: Apply the search algorithm described for pbuild.");
+		scriptOption = command.stringOption('s', "script",
+					"Designated the path for a script file describing a test scenario,. "+
+					"If this option is provided, the arguments are not interpreted directly as command-line options but are instead " +
+					"interpreted as arguments to the test script.")
 		verboseOption = command.booleanOption('v', null,
-					"Enables verbose output.");
+					"Enables verbose output.")
 		parasolLocationOption = command.stringOption(0, "location", "The location of the Parasol runtime to use. " +
 					"This is useful when debugging a script rather than a compiled application.");
 		joinOption = command.stringOption('j', "join",

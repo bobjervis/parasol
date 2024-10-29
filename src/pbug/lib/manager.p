@@ -42,7 +42,7 @@ private ref<log.Logger> logger = log.getLogger("pbug.manager");
  *		This also issues commandds to controller instances and receives notifications
  *		from them.
  *		The manager maintains a global data structure describing the environment
- *		being debugger, from a single process running a simple script, to a dynamic
+ *		being debugged, from a single process running a simple script, to a dynamic
  *		collection of processes running across a network of machines.
  *	<li>One or more Controller processes.
  *		These accept commands from the manager, interact with the process being debugged
@@ -55,9 +55,13 @@ private ref<log.Logger> logger = log.getLogger("pbug.manager");
  * ensure that a coherent multi-process 'state' is always available to the manager.
  *
  * The Manager itself consists of an HTTP Server hosting HTTPS connections to both controller's
- * and UI processes. These services use Parasol interfaces define the interactions.
+ * and UI processes. These services use Parasol interfaces to define the interactions.
  */
 public int run(ref<debug.PBugOptions> options, string exePath, string... arguments) {
+	if (options.scriptOption.set()) {
+		printf("script option: %s\n", options.scriptOption.value)
+		return 1;
+	}
 	printf("manager exePath '%s'\n", exePath);
 	for (i in arguments)
 		printf("arguments[%d] '%s'\n", i, arguments[i]);

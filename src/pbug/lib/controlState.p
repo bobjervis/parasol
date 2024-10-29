@@ -18,6 +18,7 @@ namespace parasollanguage.org:debug.controller;
 import parasol:debug;
 import parasol:exception.IllegalOperationException;
 import parasol:thread;
+import parasol:time
 import parasol:types.Set;
 import parasollanguage.org:debug.manager;
 
@@ -27,6 +28,7 @@ monitor class ControlState {
 	ref<thread.ThreadPool<boolean>> _backgroundTasks;
 	Set<int> _stoppedThreads;				// These are a map of thread ids that will probably get a process association soon.	
 	map<ref<ThreadInfo>, int> _threadMap;
+	boolean _shuttingDown
 
 	ControlState() {
 		_backgroundTasks = new thread.ThreadPool<boolean>(4);
@@ -43,6 +45,19 @@ monitor class ControlState {
 			p := _processes[i];
 			_notifier.processSpawned(p.launchedAt(), p.id(), p.label());
 		}
+	}
+
+	public void shutdown(time.Duration timeout) {
+		_shuttingDown = true
+		count := controlState.processCount();
+
+		// This has a race when there are lots of dynamically created processes under this controller.
+		// Is that a scenario needed any time soon?
+		for (i in _processes) {
+			p := _processes[i]
+			tracer.perform(new Shutdown(p, timeout == time.Duration.zero));
+		}
+		// Now the controller waits to hear from the expiring children
 	}
 
 	public void threadStopped(int tid) {
