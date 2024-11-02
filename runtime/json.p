@@ -38,9 +38,9 @@ private ref<log.Logger> logger = log.getLogger("parasol.json");
  * Parse a JSON string into Parasol objects.
  *
  * Note: Parasol's implementation of JSON distinguishes numbers that can be represented as long
- * from other numbers that must be represented approximately by a double. In 
+ * from other numbers that must be represented by a double (even if the number is an approximation). In 
  * parsing, values are stored as long if they can be successfully parsed as a long, otherwise
- * they are stpred as a double.
+ * they are parsed as a double.
  */
 public var, boolean parse(string text) {
 	Parser parser(text);

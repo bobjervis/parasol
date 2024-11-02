@@ -60,30 +60,34 @@ private ref<log.Logger> logger = log.getLogger("pbug.manager");
 public int run(ref<debug.PBugOptions> options, string exePath, string... arguments) {
 	if (options.scriptOption.set()) {
 		printf("script option: %s\n", options.scriptOption.value)
-		return 1;
-	}
-	printf("manager exePath '%s'\n", exePath);
-	for (i in arguments)
-		printf("arguments[%d] '%s'\n", i, arguments[i]);
-	cmdLine := process.getCommandLine();
-	if (cmdLine.length() < 2) {
-		printf("Command line incomplete\n");
-		return 1;
-	}
-	if (!cmdLine[1].endsWith(".pxi")) {
-		printf("First argument expected to name a .pxi file\n");
-		return 1;
-	}
-	for (i in cmdLine)
-		printf("cmdLine[%d] '%s'\n", i, cmdLine[i]);
-	if (options.applicationOption.set()) {
-		if (!sessionState.debugApplication(options, exePath, arguments)) {
-			printf("Could not debug application %s\n", options.applicationOption.value);
+		if (!sessionState.debugScript(options, options.scriptOption.value, arguments)) {
+			printf("Could not initialize script %s\n", options.scriptOption.value);
 			return 1;
 		}
 	} else {
-		printf("Controller only debugs applications\n");
-		return 1;
+		printf("manager exePath '%s'\n", exePath);
+		for (i in arguments)
+			printf("arguments[%d] '%s'\n", i, arguments[i]);
+		cmdLine := process.getCommandLine();
+		if (cmdLine.length() < 2) {
+			printf("Command line incomplete\n");
+			return 1;
+		}
+		if (!cmdLine[1].endsWith(".pxi")) {
+			printf("First argument expected to name a .pxi file\n");
+			return 1;
+		}
+		for (i in cmdLine)
+			printf("cmdLine[%d] '%s'\n", i, cmdLine[i]);
+		if (options.applicationOption.set()) {
+			if (!sessionState.debugApplication(options, exePath, arguments)) {
+				printf("Could not debug application %s\n", options.applicationOption.value);
+				return 1;
+			}
+		} else {
+			printf("Controller only debugs applications\n");
+			return 1;
+		}
 	}
 	printf("Manager port %d\n", options.managerOption.value);
 	server = new http.Server();

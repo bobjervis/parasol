@@ -13,8 +13,14 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+
+/*
+	PARASOL_VERSION is the version reported by tools and the core:parasollanguage.org
+	BUILD_VERSION is the version of the build:parasollanguage.org package
+	DEBUG_VERSION is the version of the debug:parasollanguage.org package
+ */
 define(
-	PARASOL_VERSION: 0.13.3,
+	PARASOL_VERSION: 0.14.0,
 	BUILD_VERSION: 0.2.0,
 	DEBUG_VERSION: 0.1.0,
 	)

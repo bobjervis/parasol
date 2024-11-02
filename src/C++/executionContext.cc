@@ -20,6 +20,8 @@
 #include <windows.h>
 #endif
 
+extern char **environ;
+
 namespace parasol {
 
 ExecutionContext::ExecutionContext(pxi::X86_64SectionHeader *pxiHeader, void *image, 
@@ -94,6 +96,24 @@ __thread ExecutionContext *ThreadContext::_threadContextValue;
 #endif
 
 extern "C" {
+
+char *fetchEnvironment() {
+	int len = 1;
+
+	for (char **envp = environ; *envp != 0; envp++)
+		len += strlen(*envp) + 1;
+
+	char *result = (char*)malloc(len);
+	if (result == 0)
+		return result;
+	char *out = result;
+	for (char **envp = environ; *envp != 0; envp++) {
+		strcpy(out, *envp);
+		out += strlen(*envp) + 1;
+	}
+	*out = 0;
+	return result;
+}
 
 ExecutionContext *dupExecutionContext() {
 	ExecutionContext *context = threadContext.get();

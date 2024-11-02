@@ -1192,4 +1192,30 @@ public class Environment {
 		} else
 			assert(false);
 	}
+	/**
+	 * Return a copy of the entire environment.
+	 *
+	 * If the process' C environment has been corrupted, the list of returned environment 
+	 * variables will be truncated.
+	 */
+	public ref<string[string]> fetch() {
+		result := new string[string]
+		copy := fetchEnvironment();
+		src := copy;
+		while (*src != 0) {
+			equalSign := C.strchr(src, '=');
+			if (equalSign == null)					// This is a malformed environment - possible memory corruption bug?
+				break;
+			value := equalSign + 1;
+			key := string(src, int(equalSign - src));
+			(*result)[key] = string(value);
+			src += C.strlen(src) + 1;
+		}
+		C.free(copy);
+		return result;
+	}
 }
+
+@Linux("libparasol.so.1", "fetchEnvironment")
+@Windows("parasol.dll", "fetchEnvironment")
+private abstract pointer<byte> fetchEnvironment();
