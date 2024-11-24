@@ -1,10 +1,9 @@
 import(filename: version.pbld)
-import(filename: packagees.pbld)
+import(filename: packages.pbld)
 
 package(name: installer:parasollanguage.org, manifest: false) {
-	pxi(name: pbug.pxi, main: src/pbug/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
+	pxi(name: pbug.pxi, main: src/cmd/pbug.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
 		use(package: build:parasollanguage.org)
-		use(package: debug:parasollanguage.org)
 		use(package: pbug:parasollanguage.org)
 	}
 	pxi(name: pbuild.pxi, main: src/cmd/pbuild.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
