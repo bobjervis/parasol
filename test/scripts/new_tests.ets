@@ -1,5 +1,1 @@
-dir(path: test/src) {
-	dir(path: rpc) {
-		run(filename: rpc_test_2.p)
-	}
-}
+compile(){"void f() { int x // test\n return; }"}

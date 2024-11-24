@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:runtime;
+import parasol:thread;
 
 class OverloadOperation {
 	private boolean _done;
@@ -98,7 +99,7 @@ class OverloadOperation {
 			_overload = o;
 		if (o.instances().length() > 30) {
 			// Sometimes the instances length is getting corrupted - a bad but almost untraceable bug
-			printf("%s length = %d\n", string(o.name()), o.instances().length());
+			printf("Warning %d: overloaded symbol %s instances = %d (%#x) > 30 (!)\n", thread.currentThread().id(), string(o.name()), o.instances().length(), o.instances().length());
 			return null;
 		}
 		for (int i = 0; i < o.instances().length(); i++) {

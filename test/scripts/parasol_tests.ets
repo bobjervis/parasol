@@ -16,11 +16,11 @@ dir(path: test/src) {
 		run(filename: uri_parse_test.p)
 	}
 	dir(path: import_tests) {
-		run(filename: import_ops/import_ops.p)
-		run(filename: ref_loop_import_ops/ref_loop_import_ops.p)
-		run(filename: shared_ns/interface_test_4.p)
-		run(filename: shared_ns/shared_ns.p)
-		run(filename: template_scope/template_scope.p)
+		run(filename: import_ops/import_ops.p, include: import_ops/lib)
+		run(filename: ref_loop_import_ops/ref_loop_import_ops.p, include: ref_loop_import_ops/lib)
+		run(filename: shared_ns/interface_test_4.p, include: shared_ns/lib)
+		run(filename: shared_ns/shared_ns.p, include: shared_ns/lib)
+		run(filename: template_scope/template_scope.p, include: template_scope/lib)
 	}
 	dir(path: language) {
 		run(filename: abstract_call_test.p)
@@ -603,6 +603,7 @@ compile() { "long b; boolean a = b \n!>= 37;" }
 compile() { "long b; boolean a = b \n!<> 37;" }
 compile() { "float b; boolean a = b \n<>= 37;" }
 compile() { "float b; boolean a = b \n!<>= 37;" }
+compile(){"void f() { int x // test\n return; }"}
 
 // Constant tests
 

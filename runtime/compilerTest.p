@@ -50,7 +50,6 @@ import parasol:compiler.TraverseAction;
 import parasol:compiler.Unit;
 
 private boolean verboseFlag;
-private boolean compileFromSourceArgument;
 private boolean printSymbolTable;
 private boolean showParseStageErrors;
 private string rootFolder;
@@ -60,7 +59,7 @@ private string targetArgument;
 private string importPathArgument;
 
 public void initTestObjects(string argv0, string argv1, boolean verbose, 
-				boolean compileFromSource, boolean symbols, string target, string importPathArg, string rootDir, boolean showParseStageErrorsArgument) {
+				boolean symbols, string target, string importPathArg, string rootDir, boolean showParseStageErrorsArgument) {
 	verboseFlag = verbose;
 	showParseStageErrors = showParseStageErrorsArgument;
 	if (rootDir != null)
@@ -71,7 +70,6 @@ public void initTestObjects(string argv0, string argv1, boolean verbose,
 	pxiFile = argv1;
 	targetArgument = target;
 	importPathArgument = importPathArg;
-	compileFromSourceArgument = compileFromSource;
 	printSymbolTable = symbols;
 	script.objectFactory("codePoint", CodePointObject.factory);
 	script.objectFactory("compile", CompileObject.factory);
@@ -632,6 +630,7 @@ class RunObject extends script.Object {
 	private string _output;
 	private boolean _checkOutput;
 	private int _timeout;
+	private string _include;
 
 	private RunObject(int offset) {
 		super(offset);
@@ -683,6 +682,9 @@ class RunObject extends script.Object {
 				return false;
 			}
 		}
+		a = get("include");
+		if (a != null)
+			_include = a.toString();
 		a = get("arguments");
 		if (a != null)
 			_arguments = a.toString();
@@ -705,19 +707,29 @@ class RunObject extends script.Object {
 	public void insertDefaultPath(string defaultPath) {
 		if (_filename != null)
 			_filename = storage.path(storage.path(rootFolder, defaultPath), _filename);
+		if (_include != null) {
+			includes := _include.split(':');
+			_include = "";
+			for (i in includes) {
+				include := includes[i];
+				include = storage.path(storage.path(rootFolder, defaultPath), include);
+				if (_include.length() > 0)
+					_include += ":";
+				_include += include;
+			}
+		}
 	}
 
 	public boolean run() {
 		string[] args;
 
-		args.append(parasolCommand);
-		args.append(pxiFile);
-		if (compileFromSourceArgument) {
-			string rootDir = storage.directory(storage.directory(parasolCommand));
-			args.append(storage.path(rootDir, "src/pc/main.p"));
-		}
+		rootDir := storage.directory(storage.directory(parasolCommand));
+		args.append("build/install_parasollanguage.org/bin/pc");
 		if (targetArgument != null)
 			args.append("--target=" + targetArgument);
+		if (_include != null) {
+			args.append("--include=" + _include);
+		}
 		if (verboseFlag)
 			args.append("-v");
 		args.append(_filename);

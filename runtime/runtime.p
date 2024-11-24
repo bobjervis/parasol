@@ -608,6 +608,9 @@ public string stackTrace(int skipFrames) {
  * This provides a common interface for code that wants to do stack traces and inspection of local
  * variables.
  *
+ * This is used in stack traces generated in-process for exceptions. It is also used in pbug to analysze a stack
+ * on a thread that has been paused.
+ *
  * This is a base class. Specific implementations will implement the details of fetching data from the
  * stack.
  * {@link parasol:exception.ExceptionContext} provides an implementation for a snapshot of the stack where a Parasol Exception was
@@ -655,14 +658,14 @@ public class VirtualStack {
 
 	public abstract boolean isParasolCode(long addr);
 
-	public abstract string symbolAt(long addr, long adjustment);
+	public abstract string, SlotType symbolAt(long addr, long adjustment);
 
 	public abstract int pid();
 
 	public abstract int tid();
 
 	enum SlotType {
-		VOIDED,
+		DATA,
 		CODE,
 		PARASOL,
 		STACK_REF,
@@ -673,6 +676,7 @@ public class VirtualStack {
 	class InterestingSlot {
 		SlotType type;
 		boolean confirmed;
+		int targetStackRef;		// If greater than or equal to zero, this is the 
 		long offset;			// offset from rsp where the interesting slot was found
 		long value;				// value at that slot
 		string symbol;			// any symbolic data about the slot
@@ -682,11 +686,28 @@ public class VirtualStack {
 			this.offset = offset;
 			this.value = value;
 			this.symbol = symbol;
+			this.targetStackRef = -1;
 		}
 
 		InterestingSlot() {}
 	}
 
+	class Frame {
+		boolean parasol;
+		long rip;
+		long rbp;
+		string symbol;
+		
+		Frame() {}
+		
+		Frame(boolean parasol, long rip, long rbp, string symbol) {
+			this.parasol = parasol;
+			this.rip = rip;
+			this.rbp = rbp;
+			this.symbol = symbol;
+		}
+	}
+	
 	InterestingSlot[] _returnAddresses;
 	/**
 	 * Analyze the stack to construct a set of stack frames, which can be subsequently read out.
@@ -704,9 +725,9 @@ public class VirtualStack {
 	 * of this pair.
 	 *
 	 * Figuring out which addresses on the stack are real return addresses and which are phantom's is hard, either random
-	 * function pointers or former return addresses tht have survived and been re-incorporated into a new stack frame.
+	 * function pointers or former return addresses thst have survived and been re-incorporated into a new stack frame.
 	 * If every stack frame in the stack is a Parasol function, the stack is relatively simple. Every return address
-	 * appear immediately after a saved frame pointer.
+	 * appears immediately after a saved frame pointer.
 	 *
 	 * The saved frame pointer values form a chain where one value contains the address of the next saved frame pointer.
 	 * And just above each such chain element lies the unambiguous return address.
@@ -739,7 +760,7 @@ public class VirtualStack {
 	 * If the main thread does not have a MAIN symbol return address on its stack, this might be a C program with
 	 * no Parasol.
 	 * Currently, Parasol does not support operating as a library that gets called from a C main function,
-	 * so a process main thread without a MAIN symbol wil lprobably not contain any Parasol code at all.
+	 * so a process main thread without a MAIN symbol will probably not contain any Parasol code at all.
 	 * 
 	 * In the case of the MAIN symbol, the very next slot in the candidates list should be a Parasol code address.
 	 * The address will be somewhere in the static initializers or the destructors,
@@ -761,7 +782,7 @@ public class VirtualStack {
 	 * Values on the stack can appear to be return addresses if they happen to fall into the address range of an executable
 	 * memory segment. One possibility is that what is stored in the stack is a function pointer. These can be distinguished
 	 * by examining the memory contents just before the address on the stack. If the bytes just before the address are
-	 * not part of a return instruction, then the address cannot be a return address. If the bytes happen to be a return
+	 * not part of a call instruction, then the address cannot be a return address. If the bytes happen to be a return
 	 * address, you can be somewhat confidant that the value is a return address.
 	 *
 	 * A return address can be found in any stack frame because not all memory slots are erased after returning from a
@@ -831,45 +852,88 @@ public class VirtualStack {
 	 */
 	public void analyzeStack(long rbp, long rip) {
 		InterestingSlot[] candidates;
-
+		Frame[] frames;
+		
+		// Walk back through the stack from just below _stackSize to 0 - whic is the offset where RSP currently points
+		// Do some basic classification. The memory map contains a list of segment, each with it's own protections.
+		// non-Parasol code segments are marked a particular way (execute only). Parasol image segments are marks with
+		// all permissions (read, write, exec). The only other interresting possible address values are values in the
+		// address range of the stack.
 		for (long offset = _stackSize; offset > 0; ) {
 			offset -= address.bytes;
 			stackSlot := _stackBase + offset;
 			value := slot(stackSlot);
-			s := symbolAt(value - 1, 1);
+			string s
+			SlotType slotType
+			(s, slotType) = symbolAt(value - 1, 1);
 			x := candidates.length();
-			if (isParasolCode(value) && s != null)
-				candidates.append(InterestingSlot(SlotType.PARASOL, offset, value, s));
-			else if (isCode(value) && s != null) {
-				if (s.startsWith("libparasol.so.1 _ZN7parasol16ExecutionContext9runNativeEPFiPvE")) {
-					candidates.clear();
-					candidates.append(InterestingSlot(SlotType.MAIN, offset, value, null));
-				} else if (s.startsWith("libpthread-2.23.so start_thread")) {
-					candidates.clear();
-					candidates.append(InterestingSlot(SlotType.THREAD, offset, value, null));
-				} else if ((stackSlot & 0xf) == 8)
-					candidates.append(InterestingSlot(SlotType.CODE, offset, value, s));
-			} else if ((value & 0xf) == 0 && value >= stackSlot + 2 * address.bytes && value < _stackBase + _stackSize) {
-				if (candidates.length() == 1 && candidates[0].type == SlotType.MAIN)
-					continue;
-				candidates.append(InterestingSlot(SlotType.STACK_REF, offset, value, null));
+			// ABI compliant return addresses are stored with stack address with final hex digit 8.
+			if ((stackSlot & 0xf) == 8) { 
+				if (isParasolCode(value) && s != null)
+					candidates.append(InterestingSlot(SlotType.PARASOL, offset, value, s));
+				else if (isCode(value) && s != null) {
+	//				printf("    non-Parasol codeslot type %s offset = %x value = %p s = %s\n", string(slotType), offset, value, s);
+					switch (slotType) {
+					case MAIN:
+						candidates.clear();
+						candidates.append(InterestingSlot(slotType, offset, value, null));
+						break
+						
+					case THREAD:				
+						candidates.clear();
+						candidates.append(InterestingSlot(slotType, offset, value, null));
+						break
+						
+					default:
+						candidates.append(InterestingSlot(SlotType.CODE, offset, value, s));
+					}
+				}
+			// Parasol functions stored caller's RBP at the return address minus 8, so final hex digit 0
+			} else if ((stackSlot & 0xf) == 0) {
+				// A valid saved RBP contains a address above, in the same stack and also aligned on final hex digit 0
+				if ((value & 0xf) == 0 && value >= stackSlot + 2 * address.bytes && value < _stackBase + _stackSize) {
+	 				candidates.append(InterestingSlot(SlotType.STACK_REF, offset, value, null));
+					candidate := &candidates[x];
+					for (int j = x - 1; j >= 0; j--) {
+						comp := candidates[j];
+						if (comp.type == SlotType.STACK_REF && comp.offset == value - _stackBase) {
+							candidate.targetStackRef = j;
+							break;
+						}
+					}
+				}
 			}
 		}
 		// If the stack is empty - we having nothing to show.		
 		if (candidates.length() == 0)
 			return;
-/*
+
 		printf("before pruning:\n");
-		for (int i = candidates.length() - 1; i >= 0; i--) {
+		for (i in candidates) {
 			c := candidates[i];
-			printf("    [%2d] %-9s %16x %s (%x)\n", i, string(c.type), c.offset + _stackBase, c.symbol, c.value);
+			printf("    [%2d] %-9s %16x %s (%x)", i, string(c.type), c.offset + _stackBase, c.symbol, c.value);
+			if (c.targetStackRef >= 0)
+				printf(" -> %d", c.targetStackRef);
+			printf("\n");
 		}
-*/
+
 		switch (candidates[0].type) {
 		case THREAD:
 //			printf("This is a Parasol-launched thread\n");
-			if (candidates.length() > 1 && candidates[1].type != SlotType.PARASOL)
+			if (candidates.length() > 1 && 
+				(candidates[0].offset - candidates[1].offset != 8 || candidates[1].type != SlotType.STACK_REF))
 				printf("WARN: Unexpected non-Parasol slot candidate %s %s\n", string(candidates[1].type), candidates[1].symbol);
+			else {
+				last := 1;
+				for (;;) {
+					next := nextFrame(&candidates, last);
+					if (next < 0)
+						break;
+					frames.append(Frame(candidates[next - 1].type == SlotType.PARASOL, candidates[next - 1].value, 
+											candidates[next].offset + _stackBase, candidates[next - 1].symbol))
+					last = next;
+				}
+			}
 			break;
 
 		case MAIN:
@@ -884,6 +948,13 @@ public class VirtualStack {
 		default:
 			printf("WARN: Unexpected starting point for an application %s %s\n", string(candidates[1].type), candidates[1].symbol);
 		}
+		
+			printf("frames:      RSP     \n");
+		for (i in frames) {
+			f := &frames[i];
+			printf("  [%3d] %x %s\n", i, f.rbp, f.symbol);
+		}
+		printf("RBP = %p\n", rbp);
 		boolean frameChainDetected;
 		long previousFrame;
 		for (i in candidates) {
@@ -894,6 +965,8 @@ public class VirtualStack {
 									// appear just below the main function of the application.
 			case THREAD:			// The first frame on a Parasol thread is a Parsol function in thread.p
 									// that calls 'nested', which in turn calls the user's starting function.
+									
+/*
 				for (;;) {
 					if (candidates.length() < i + 3)
 						break;
@@ -914,6 +987,7 @@ public class VirtualStack {
 					previousFrame = _stackBase + c.offset - address.bytes;
 					break;
 				}
+ */
 				break;
 
 			case PARASOL:
@@ -933,7 +1007,7 @@ public class VirtualStack {
 							cc := &candidates[j];
 							if (cc.type == SlotType.CODE)
 								break;
-							cc.type = SlotType.VOIDED;
+							cc.type = SlotType.DATA;
 //							printf("voiding %d\n", j);
 						}
 					}
@@ -952,9 +1026,21 @@ public class VirtualStack {
 			switch (c.type) {
 			case CODE:
 			case PARASOL:
-				printf("    %s (%x)\n", c.symbol, c.value);
+				printf("    [RSP+%d]: %s %s (%x)\n", c.offset, string(c.type), c.symbol, c.value);
 			}
 		}
+	}
+
+	static int nextFrame(ref<InterestingSlot[]> candidates, int after) {
+		for (int j = after + 1; j < candidates.length(); j++) {
+			c := (*candidates)[j];
+			if (c.type == SlotType.STACK_REF && c.targetStackRef == after) {
+				p := (*candidates)[j - 1];
+				if (p.type == SlotType.PARASOL)
+					return j;
+			}
+		}
+		return -1;
 	}
 
 	/**
@@ -1014,6 +1100,7 @@ public class VirtualStack {
 	} 
 
 }
+
 /**
  * Return the window size in characters
  *

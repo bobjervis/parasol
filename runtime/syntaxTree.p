@@ -20,6 +20,7 @@ import parasol:context;
 import parasol:runtime;
 import parasol:storage;
 import parasol:text;
+import parasol:thread;
 import parasol:unicode;
 
 public enum Operator {

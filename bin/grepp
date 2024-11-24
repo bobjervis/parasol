@@ -4,5 +4,5 @@ PARASOL_BIN=$(dirname "`readlink -f \"$0\"`")/..
 export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
 export IDE=$PARASOL_HOME/..
 
-grep "$@" $PARASOL_HOME/runtime/*.p $PARASOL_HOME/src/*/*.p $PARASOL_HOME/src/*/lib/*.p $PARASOL_HOME/src/*/*.h $PARASOL_HOME/src/*/*.cc \
-      $IDE/*/src/*.p $IDE/*/src/parasol/*.p $IDE/*/src/parasol/*/*.p 
+grep "$@" $PARASOL_HOME/runtime/*.p $PARASOL_HOME/src/*/*.p $PARASOL_HOME/src/lib/*/*.p $PARASOL_HOME/src/*/*.h $PARASOL_HOME/src/*/*.cc \
+      $IDE/*/src/parasol/*.p $IDE/*/src/parasol/*/*.p 

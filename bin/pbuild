@@ -14,6 +14,6 @@ then
 	
 	exec "$PARASOL_HOME/bin/parasolrt" "$PARASOL_HOME/bin/pbuild.pxi" "$@"
 else
-	exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/pbuild/main.p" "$@"
+	exec "$PARASOL_HOME/bin/pc" -i "$PARASOL_HOME/src/lib/build" "$PARASOL_HOME/src/cmd/pbuild.p" "$@"
 fi
 

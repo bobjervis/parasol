@@ -42,6 +42,10 @@ public class CodegenContext {
 		return _verbose;
 	}
 
+	public void silenceVerbose() {
+		_verbose = false;
+	}	
+
 	public memory.StartingHeap startingHeap() {
 		return _startingHeap;
 	}

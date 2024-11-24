@@ -20,7 +20,6 @@ import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:compiler.Target;
 import parasol:time;
 
 /*
@@ -95,7 +94,7 @@ int main(string[] args) {
 		return 1;
 	}
 	string filename = finalArguments[0];
-	ref<Target> target = compileContext.compile(filename);
+	target := compileContext.compile(filename);
 	if (genHeaderCommand.symbolTableOption.value)
 		compileContext.printSymbolTable();
 	if (genHeaderCommand.verboseOption.value) {

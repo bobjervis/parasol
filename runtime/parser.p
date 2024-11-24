@@ -17,6 +17,7 @@ namespace parasol:compiler;
 
 import parasol:process;
 import parasol:runtime;
+import parasol:thread;
 
 public class Parser {
 	private ref<SyntaxTree> _tree;
@@ -126,9 +127,8 @@ public class Parser {
 		previous := _scanner.allowSemiColonElision();
 		for (;;) {
 			Token t = _scanner.next();
-//			CompileString cs = _scanner.value();
+//			s := string(_scanner.value());
 //			int line = _scanner.lineNumber(_scanner.location());
-//			string s(cs.data, cs.length);
 //			printf("Token %s %s %d\n", string(t), s, line);
 			if (t == Token.RIGHT_CURLY) {
 				block.closeCurlyLocation = _scanner.location();
@@ -927,6 +927,7 @@ public class Parser {
 						if (n.op() == Operator.SYNTAX_ERROR)
 							return n;
 						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
+						
 						func.body.statement(_tree.newNodeList(n));						
 					} else if (t == Token.LEFT_CURLY) {
 						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
@@ -1039,6 +1040,7 @@ public class Parser {
 			return _tree.newDeclaration(type, identifier, location);
 		} else
 			_scanner.pushBack(t);
+		
 		ref<Node> body = parseClass(context, identifier, _scanner.location());
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
@@ -1307,6 +1309,7 @@ public class Parser {
 
 		Token t = _scanner.next();
 		SourceOffset location = _scanner.location();
+		
 		switch (t) {
 		case	NEW:
 			t = _scanner.next();

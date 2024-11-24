@@ -1,0 +1,18 @@
+package(name: build:parasollanguage.org, version: "${BUILD_VERSION}") {
+	file(name: *.p, src: src/lib/build)
+}
+
+package(name: documentation:parasollanguage.org, version: "${BUILD_VERSION}") {
+	file(name: *.p, src: src/lib/documentation)
+}
+
+package(name: debug:parasollanguage.org, version: "${DEBUG_VERSION}") {
+	file(name: processControl.p, src: src/lib/debug)
+	file(name: session.p, src: src/lib/debug)
+}
+
+package(name: pbug:parasollanguage.org, version: "${DEBUG_VERSION}") {
+	file(name: *.p, src: src/lib/debug)
+	use(package: build:parasollanguage.org)
+}
+

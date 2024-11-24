@@ -40,6 +40,8 @@ import parasol:thread;
 int INDENT = 4;
 
 public class CompileContext extends CodegenContext {
+	int bdepth;
+	
 	public Operator visibility;
 	public boolean isStatic;
 	public boolean isFinal;
@@ -48,8 +50,10 @@ public class CompileContext extends CodegenContext {
 	public ref<Target> target;
 	public ref<PlainSymbol> compileTarget;		// Special 'compileTarget' variable that is used to
 												// implement conditional compilation
+	public string[] includes;					// a list of zero or more directories containing sources to be included in the build
 
 	public string imageVersion;					// If not null, the image version string for any build of a pxi.
+
 	private ref<DomainForest> _forest;
 	private ref<Scope> _root;
 	private boolean _forestIsCreated;
@@ -68,6 +72,9 @@ public class CompileContext extends CodegenContext {
 	private ref<Scope>[] _liveSymbolScopes;		// Populated during fold actions with the scopes of the live symbols
 												// that need destructor calls and locks that need unlocked.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
+	
+	// These symbols designate definitions provided in the core package
+	
 	private ref<Type> _monitorClass;
 	private ref<ParameterScope> _throwException;
 	private ref<ParameterScope> _dispatchException;
@@ -82,6 +89,7 @@ public class CompileContext extends CodegenContext {
 	private ref<OverloadInstance> _pointer;
 	private ref<PlainSymbol> _Object;
 	private ref<PlainSymbol> _Array;
+	
 	private ref<thread.ThreadPool<boolean>> _workers;
 	private boolean _workersAreCreated;
 
@@ -234,6 +242,10 @@ public class CompileContext extends CodegenContext {
 	}
 
 	public ref<Target> compile(string filename) {
+		return compile(filename, false);
+	}
+	
+	public ref<Target> compile(string filename, boolean recursive) {
 		if (verbose())
 			printf("Thread %s compile(%s)\n", thread.currentThread().name(), filename);
 
@@ -246,17 +258,24 @@ public class CompileContext extends CodegenContext {
 		// This will make the 'main file' unit[1]
 		unitFilenames.append(filename);
 
-		collectFilenames(storage.directory(filename), false, &unitFilenames);
+		if (recursive)
+			collectFilenames(storage.directory(filename), false, recursive, &unitFilenames);
 
+		for (i in includes)
+			collectFilenames(includes[i], true, false, &unitFilenames);
+		
+		
 		if (verbose()) {
 			printf("compiling:\n");
 			for (i in unitFilenames)
 				printf("[%3d] %s\n", i, unitFilenames[i]);
 		}
 		boolean success = parseUnits(unitFilenames, "");
-		// How do we force filename to be included, even if it has no namespace
-		
 
+		if (verbose())
+			printf("parseUnits(%d files) success = %s.\n", unitFilenames.length(), success);
+		silenceVerbose();
+		
 		ref<Unit> mainFile = _arena.getUnit(1);
 
 		if (!mainFile.hasNamespace())
@@ -300,7 +319,7 @@ public class CompileContext extends CodegenContext {
 			return null;
 	}
 
-	private static void collectFilenames(string directory, boolean collectParasolSources, ref<string[]> unitFilenames) {
+	private static void collectFilenames(string directory, boolean collectParasolSources, boolean recursive, ref<string[]> unitFilenames) {
 		storage.Directory d(directory);
 		if (d.first()) { 
 			do {
@@ -309,8 +328,8 @@ public class CompileContext extends CodegenContext {
 					continue;
 				string path = d.path();
 				// recurse through directories, collecting sources there
-				if (storage.isDirectory(path))
-					collectFilenames(path, true, unitFilenames);
+				if (recursive, storage.isDirectory(path))
+					collectFilenames(path, true, recursive, unitFilenames);
 				else if (collectParasolSources && path.endsWith(".p"))
 					unitFilenames.append(path);
 			} while (d.next());
@@ -320,7 +339,6 @@ public class CompileContext extends CodegenContext {
 	private boolean parseUnits(string[] unitFilenames, string packageDir) {
 		ref<Unit> outer = definingFile;
 		boolean success = true;
-//		printf("    %s parsing units\n", packageDir);
 		for (i in unitFilenames) {
 			ref<Unit> unit = _arena.defineUnit(unitFilenames[i], packageDir);
 			// The unit name has already been seen, and parsed. Ignore this instance.
@@ -328,17 +346,17 @@ public class CompileContext extends CodegenContext {
 				continue;
 
 			if (!unit.parse(this)) {
-//				printf("  parse FAIL    [%d] %s\n", i, unitFilenames[i]);
+				if (verbose())
+					printf("  parse FAIL    [%d] %s\n", i, unitFilenames[i]);
 				success = false;
 			}
 
-//			printf("    %d about to build scope for unit %s\n", thread.currentThread().id(), unitFilenames[i]);
 			if (unit.buildScopes(this)) {
-				if (_logImports)
+				if (_logImports) {
 					printf("        Built scopes for %s\n", unitFilenames[i]);
+				}
 			}
 		}
-//		printf("    %s parsed %d units\n", packageDir, unitFilenames.length());
 		definingFile = outer;
 		return success;
 	}
@@ -411,12 +429,13 @@ public class CompileContext extends CodegenContext {
 			string[] units = populateFromPackage(_packages[i], domain, names);
 			string directory = _packages[i].directory();
 			for (j in units) {
-//				printf("        %s / %s\n", directory, units[j]);
 				string filename = storage.path(directory, units[j]);
 				ref<Unit> unit = _arena.defineImportedUnit(units[j], directory);
+				
 				// The unit name has already been seen, and parsed. Ignore this instance.
 				if (unit.parsed())
 					continue;
+
 
 				if (!unit.parse(this)) {
 					printf("  parse FAIL    [%d] %s\n", j, filename);
@@ -424,9 +443,12 @@ public class CompileContext extends CodegenContext {
 				}
 
 				if (unit.buildScopes(this)) {
-					if (_logImports)
-						printf("        Built scopes for imported unit %s\n", filename);
-				}
+					if (_logImports) {
+						printf("        Built scopes for imported unit %s\n", unit.filename());
+					}
+				} else if (verbose()) {
+					printf("    %d recursive buildScopes FAILED\n", thread.currentThread().id());
+				}					
 			}
 		}
 		return success;
@@ -626,6 +648,8 @@ public class CompileContext extends CodegenContext {
 		ref<Node> definition = s.definition();
 		ref<Scope> outer = _current;
 		_current = s;
+//		if (verbose())
+//			printf("    %d %p %s\n", thread.currentThread().id(), definition, string(definition.op()));
 		switch (definition.op()) {
 		case	FUNCTION:
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition);
@@ -729,10 +753,12 @@ public class CompileContext extends CodegenContext {
 	}
 
 	private static TraverseAction buildScopeInTree(ref<Node> n, address data) {
-//		printf(">>>buildScope(%p %s,...)\n", n, string(n.op()));
+//		if (verbose())
+//			printf(">>>buildScope(%p %s,...)\n", n, string(n.op()));
 		ref<CompileContext> context = ref<CompileContext>(data);
 		TraverseAction t = context.buildScopes(n);
-//		printf("<<<buildScope(%p %s,...)\n", n, string(n.op()));
+//		if (verbose())
+//			printf("<<<buildScope(%p %s,...)\n", n, string(n.op()));
 		return t;
 	}
 
@@ -2480,13 +2506,14 @@ public class Unit extends SourceFile {
 			return false;
 		return _namespaceNode.namespaceConforms(importNode);
 	}
- 
+ 	
 	public boolean buildScopes(ref<CompileContext> compileContext) {
 		if (_scopesBuilt)
 			return false;
 		_scopesBuilt = true;
 		_scope = compileContext.arena().createUnitScope(compileContext.root(), _tree.root(), this);
-//		printf("    %d createUnitScope returned\n", thread.currentThread().id());
+//		if (compileContext.verbose())
+//			printf("    %d createUnitScope returned\n", thread.currentThread().id());
 		_tree.root().scope = _scope;
 		compileContext.buildScopes();
 		if (_namespaceNode != null) {

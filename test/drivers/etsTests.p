@@ -78,8 +78,6 @@ class TestCommand extends process.Command {
 		targetOption = stringOption(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
-		compileFromSourceOption = booleanOption('s', "compileFromSource",
-					"In --test mode, any 'run' tests are run with 'compiler/main.p' included.");
 		helpOption('?', "help",
 					"Displays this help.");
 	}
@@ -94,7 +92,6 @@ class TestCommand extends process.Command {
 	ref<process.Option<string>> testPxiOption;
 	ref<process.Option<boolean>> logImportsOption;
 	ref<process.Option<boolean>> symbolTableOption;
-	ref<process.Option<boolean>> compileFromSourceOption;
 	ref<process.Option<boolean>> showParseStageErrorsOption;
 }
 
@@ -125,7 +122,6 @@ int main(string[] args) {
 			pxiName = storage.path(binDir, "x86-64-lnx.pxi");
 	}
 	initTestObjects(process.binaryFilename(), pxiName, runetsCommand.verboseOption.value, 
-			runetsCommand.compileFromSourceOption.value,
 			runetsCommand.symbolTableOption.value,
 			runetsCommand.targetOption.value,
 			runetsCommand.importPathOption.value,

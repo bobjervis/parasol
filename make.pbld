@@ -14,13 +14,19 @@
    limitations under the License.
  */
 import(filename: version.pbld)
+import(filename: packages.pbld)
 
-application(name: pbug, main: src/pbug/main.p, version: "${PARASOL_VERSION}") {
+application(name: pbug, main: src/cmd/pbug.p, version: "${PARASOL_VERSION}") {
+	use(package: build:parasollanguage.org)
+	use(package: pbug:parasollanguage.org)
+}
+
+application(name: pbuild, main: src/cmd/pbuild.p, version: "${PARASOL_VERSION}") {
 	use(package: build:parasollanguage.org)
 }
 
-application(name: pbuild, main: src/pbuild/main.p, version: "${PARASOL_VERSION}") {
-	//use(package: build:parasollanguage.org)
+application(name: paradoc, main: src/cmd/paradoc.p, version: "${PARASOL_VERSION}") {
+	use(package: documentation:parasollanguage.org)
 }
 
 package(name: core:parasollanguage.org, version: "${PARASOL_VERSION}", preserveAnonymousUnits: true) {
@@ -34,15 +40,6 @@ package(name: core:parasollanguage.org, version: "${PARASOL_VERSION}", preserveA
 	init(placement: last) {
 		
 	}
-}
-
-package(name: build:parasollanguage.org, version: "${BUILD_VERSION}") {
-	file(name: *.p, src: src/pbuild/lib)
-}
-
-package(name: debug:parasollanguage.org, version: "${DEBUG_VERSION}") {
-	file(name: processControl.p, src: src/pbug/lib)
-	file(name: session.p, src: src/pbug/lib)
 }
 
 target(os: linux, cpu: x86-64) {
@@ -74,30 +71,23 @@ target(os: linux, cpu: x86-64) {
 				file(name: main.cc, src: src/C++)
 				file(name: *.h, src: src/C++)
 			}
-			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
+			pxi(name: x86-64-lnx.pxi, main: src/cmd/pc.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
 		}
 		include(name: runtime, type: package, src: core:parasollanguage.org)
 		folder(name: src) {
-			folder(name: paradoc) {
-				file(name: *.p, src: src/paradoc)
-				folder(name: lib) {
-					file(name: *.p, src: src/paradoc/lib)
+			folder(name: cmd) {
+				file(name: *.p, src: src/cmd)
+			}
+			folder(name: lib) {
+				folder(name: build) {
+					file(name: *.p, src: src/lib/build)
 				}
-			}
-			folder(name: pbug) {
-				file(name: *.p, src: src/pbug)
-			}
-			folder(name: pbuild) {
-				file(name: *.p, src: src/pbuild)
-				folder(name: lib) {
-					file(name: *.p, src: src/pbuild/lib)
+				folder(name: debug) {
+					file(name: *.p, src: src/lib/debug)
 				}
-			}
-			folder(name: pc) {
-				file(name: *.p, src: src/pc)
-			}
-			folder(name: pcontext) {
-				file(name: *.p, src: src/pcontext)
+				folder(name: documentation) {
+					file(name: *.p, src: src/lib/documentation)
+				}
 			}
 			folder(name: util) {
 				file(name: *.p, src: src/util)
@@ -163,7 +153,7 @@ target(os: windows, cpu: x86-64) {
 			file(name: pc.bat, src: bin)
 			file(name: runets.bat, src: bin)
 			file(name: unit.bat, src: bin)
-			pxi(name: x86-64-win.pxi, main: src/pc/main.p. target: x86-64-win, version: "${PARASOL_VERSION}")
+			pxi(name: x86-64-win.pxi, main: src/cmd/pc.p. target: x86-64-win, version: "${PARASOL_VERSION}")
 		}
 		include(type: package, name: core:parasollanguage.org)
 		folder(name: src) {
@@ -234,9 +224,8 @@ command(name: dumppxi, main: src/util/dumppxi.p)
 command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)
 command(name: hex, main: src/util/hex.p)
-command(name: paradoc, main: src/paradoc/paradoc.p)
-command(name: pc, main: src/pc/main.p)
-command(name: pcontext, main: src/pcontext/main.p)
+command(name: pc, main: src/cmd/pc.p)
+command(name: pcontext, main: src/cmd/pcontext.p)
 command(name: pcurl, main: src/util/pcurl.p)
 command(name: ucdParser, main: src/util/ucdParser.p)
 command(name: phost, main: src/util/phost.p)

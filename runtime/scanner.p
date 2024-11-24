@@ -557,6 +557,10 @@ public class Scanner {
 						c = getc();
 						if (c == '\n') {
 							_file.append(_location);
+							_possiblyElidedSemiLocation = _location;
+							t = afterWhiteSpace();
+							if (t != Token.EMPTY)
+								return t;
 							break;
 						}
 						if (c == -1)

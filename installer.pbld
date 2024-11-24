@@ -1,16 +1,18 @@
 import(filename: version.pbld)
+import(filename: packagees.pbld)
 
 package(name: installer:parasollanguage.org, manifest: false) {
 	pxi(name: pbug.pxi, main: src/pbug/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
 		use(package: build:parasollanguage.org)
+		use(package: debug:parasollanguage.org)
+		use(package: pbug:parasollanguage.org)
 	}
-	pxi(name: pbuild.pxi, main: src/pbuild/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
-	pxi(name: paradoc.pxi, main: src/paradoc/paradoc.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
-	pxi(name: pcontext.pxi, main: src/pcontext/main.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
+	pxi(name: pbuild.pxi, main: src/cmd/pbuild.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
+		use(package: build:parasollanguage.org)
+	}
+	pxi(name: paradoc.pxi, main: src/cmd/paradoc.p, target: x86-64-lnx, version: "${PARASOL_VERSION}") {
+		use(package: documentation:parasollanguage.org)
+	}
+	pxi(name: pcontext.pxi, main: src/cmd/pcontext.p, target: x86-64-lnx, version: "${PARASOL_VERSION}")
 }
-
-package(name: build:parasollanguage.org, version: "${BUILD_VERSION}") {
-	file(name: *.p, src: src/pbuild/lib)
-}
-
 
