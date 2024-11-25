@@ -39,9 +39,9 @@
  * IDE's have rightfully devoted most of the display space to program source. A debugger
  * should probably strive to keep the design focus there as well.
  *
- * The basic model is to think about the the terimnal window being divided into panels by
- * a set of splits. Starting with the outer-most perimeter of the terimnal os one panel, a
- * horizontal or vertical divider is added to each panel until the final goemetry is arrived at.
+ * The basic model is to think about the the terimnal window being divided into tiles by
+ * a set of splits. Starting with the outer-most perimeter of the terimnal os one tile, a
+ * horizontal or vertical divider is added to each tile until the final goemetry is arrived at.
  *
  * It seems tradiitonal now to talk in terms of the way that IDE's usually divide their
  * primary window. There is normally a horizontal split in the lower portion of the main
@@ -54,14 +54,14 @@
  * Many if not all of these dividers can be moved back and forth as the user desires to
  * customize the appearance.
  *
- * The contents of each panel consist of a @{link Scroll}. In it's most simple form, it is a
+ * The contents of each tile consist of a @{link Scroll}. In it's most simple form, it is a
  * vector of strings. Each element of the vector is displayed as a line of text. When
- * a particular scroll is posted to a panel, scroll bars will be included if the panel
+ * a particular scroll is posted to a tile, scroll bars will be included if the tile
  * is too small to display all of the text.
  *
  * Augmenting that text is a vector of spans. Each span lists the beginning and the end
  * of that span. Spans may overlap. Spans provide attribute information about how the
- * span will be displayed in the panel.
+ * span will be displayed in the tile.
  *
  * Several sub-classes of {@link Scroll} exist:
  *
@@ -86,6 +86,7 @@
  *	<li> Step into (execute one source statement, and stop at the beginning of any function called
  *       by the statement)
  *	<li> Step out of (execute until the current function returns and stop at the return address)
+ *  <li> Set or clear brakpoints 
  *</ul>
  */
 namespace parasollanguage.org:cli;
@@ -110,6 +111,7 @@ import native:linux;
 
 import parasollanguage.org:debug;
 import parasollanguage.org:debug.manager;
+import parasollanguage.org:tty;
 
 logger := log.getLogger("pbug.cli");
 
@@ -118,8 +120,8 @@ int PROC_STAT_COLUMNS		= 44;	// expected number of columns of data to be reporte
 									// /proc/<pid>/task/<tid>/stat
 
 //Notifier notifier;
-ref<Terminal> terminal;
-ref<Panel> mainWindow;
+ref<tty.Terminal> terminal;
+ref<tty.Tile> mainWindow;
 ref<Monitor> cliDone;
 string managerUrl
 boolean shuttingDown
@@ -172,7 +174,7 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 		return 1;
 	}
 	
-	terminal = Terminal.initialize(0, 2);		// puts fd 0 and 2 (if they're both connected to a tty) into raw mode.
+	terminal = tty.Terminal.initialize(0, 2);		// puts fd 0 and 2 (if they're both connected to a tty) into raw mode.
 	if (terminal == null) {
 		printf("fd 0 and 2 are not both a tty\n");
 		cleanup();
@@ -183,13 +185,13 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 
 	setTerminal();
 
-	mainWindow = new Panel(terminal);
+	mainWindow = new tty.Tile(terminal);
 
 	upperTier := mainWindow.top();
 	lowerTier := mainWindow.next();
 	status := mainWindow.next();
 
-	statusLog := new LogScroll(100);
+	statusLog := new tty.LogScroll(100);
 	status.bind(statusLog);
 
 	directoryOutline := upperTier.left();
@@ -243,7 +245,7 @@ void cleanup() {
 
 void inputLoop() {
 	for (;;) {
-		Key key;
+		tty.Key key;
 		int c, shifts, button, row, column;
 
 		(key, c) = terminal.getKeystroke();

@@ -241,11 +241,7 @@ public class CompileContext extends CodegenContext {
 		return true;
 	}
 
-	public ref<Target> compile(string filename) {
-		return compile(filename, false);
-	}
-	
-	public ref<Target> compile(string filename, boolean recursive) {
+	public ref<Target> compile(string filename, string... extraUnits) {
 		if (verbose())
 			printf("Thread %s compile(%s)\n", thread.currentThread().name(), filename);
 
@@ -258,11 +254,11 @@ public class CompileContext extends CodegenContext {
 		// This will make the 'main file' unit[1]
 		unitFilenames.append(filename);
 
-		if (recursive)
-			collectFilenames(storage.directory(filename), false, recursive, &unitFilenames);
-
+		if (extraUnits.length() > 0)
+			unitFilenames.append(extraUnits);
+			
 		for (i in includes)
-			collectFilenames(includes[i], true, false, &unitFilenames);
+			collectFilenames(includes[i], &unitFilenames);
 		
 		
 		if (verbose()) {
@@ -311,7 +307,7 @@ public class CompileContext extends CodegenContext {
 		else
 			return null, true;
 	}
-
+	
 	public ref<Target> compilePackage(boolean isCorePackage, string[] unitFilenames, string packageDir) {
 		if (parseUnits(unitFilenames, packageDir))
 			return finishCompile(isCorePackage, null, null);
@@ -319,7 +315,7 @@ public class CompileContext extends CodegenContext {
 			return null;
 	}
 
-	private static void collectFilenames(string directory, boolean collectParasolSources, boolean recursive, ref<string[]> unitFilenames) {
+	private static void collectFilenames(string directory, ref<string[]> unitFilenames) {
 		storage.Directory d(directory);
 		if (d.first()) { 
 			do {
@@ -327,10 +323,9 @@ public class CompileContext extends CodegenContext {
 				if (d.filename().startsWith("."))
 					continue;
 				string path = d.path();
-				// recurse through directories, collecting sources there
-				if (recursive, storage.isDirectory(path))
-					collectFilenames(path, true, recursive, unitFilenames);
-				else if (collectParasolSources && path.endsWith(".p"))
+				if (storage.isDirectory(path))
+					collectFilenames(path, unitFilenames);
+				else if (path.endsWith(".p"))
 					unitFilenames.append(path);
 			} while (d.next());
 		}

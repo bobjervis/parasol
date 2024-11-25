@@ -17,8 +17,9 @@ import(filename: version.pbld)
 import(filename: packages.pbld)
 
 application(name: pbug, main: src/cmd/pbug.p, version: "${PARASOL_VERSION}") {
+	file(name: *.p, src: src/lib/debug)
 	use(package: build:parasollanguage.org)
-	use(package: pbug:parasollanguage.org)
+	use(package: tty:parasollanguage.org)
 }
 
 application(name: pbuild, main: src/cmd/pbuild.p, version: "${PARASOL_VERSION}") {

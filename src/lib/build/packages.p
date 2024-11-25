@@ -822,7 +822,9 @@ public class Application extends RunnableProduct {
 			return null, false;			
 		string mainFile = storage.path(buildDir(), _main);
 		_compileContext.imageVersion = _version;
-		ref<compiler.Target> target = _compileContext.compile(mainFile);
+		string[] unitFilenames;
+		getUnitFilenames(null, &unitFilenames);
+		ref<compiler.Target> target = _compileContext.compile(mainFile, unitFilenames);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
 		if (coordinator().verbose())
@@ -996,7 +998,9 @@ class Pxi extends RunnableProduct {
 	public ref<compiler.Target>, boolean compile() {
 		string mainFile = storage.path(buildDir(), _main);
 		_compileContext.imageVersion = _version;
-		ref<compiler.Target> target = _compileContext.compile(mainFile);
+		string[] unitFilenames;
+		getUnitFilenames(null, &unitFilenames);
+		ref<compiler.Target> target = _compileContext.compile(mainFile, unitFilenames);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
 		if (coordinator().verbose())

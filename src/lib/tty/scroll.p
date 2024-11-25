@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasollanguage.org:cli;
+namespace parasollanguage.org:tty;
 
 public class Scroll {
 	/**

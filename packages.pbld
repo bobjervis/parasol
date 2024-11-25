@@ -11,8 +11,6 @@ package(name: debug:parasollanguage.org, version: "${DEBUG_VERSION}") {
 	file(name: session.p, src: src/lib/debug)
 }
 
-package(name: pbug:parasollanguage.org, version: "${DEBUG_VERSION}") {
-	file(name: *.p, src: src/lib/debug)
-	use(package: build:parasollanguage.org)
+package(name: tty:parasollanguage.org, version: "${TTY_VERSION}") {
+	file(name: *.p, src: src/lib/tty)
 }
-

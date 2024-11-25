@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasollanguage.org:cli;
+namespace parasollanguage.org:tty;
 
 import parasol:exception.IllegalArgumentException;
 
@@ -35,20 +35,20 @@ public class Layout {
 }
 
 /**
- * Panels form a hierarchy. The tree always has a single root: the TerminalFrame. It has exactly one
+ * Tiles form a hierarchy. The tree always has a single root: the TerminalFrame. It has exactly one
  * child. This panel, and each of its descendants. These relationships are established as existing panels
  * are split up.
  */
-public class Panel {
-	private int _x, _y, _width, _height;	// Display reectangle of a panel.
-	private ref<Panel> _parent;				// This panel's parent panel.
-	private ref<Panel>[] _children;			// vector of possibly many children
+public class Tile {
+	private int _x, _y, _width, _height;	// Display reectangle of a tile.
+	private ref<Tile> _parent;				// This panel's parent tile.
+	private ref<Tile>[] _children;			// vector of possibly many children
 	private Direction _direction;			// The layout of the children inside the parent.
 	private ref<Scroll> _scroll;			// The scroll object bound to this panel.
-
+	private TileConstraints _constraints
 	private Layout _layout;
 
-	public Panel(ref<Terminal> frame) {
+	public Tile(ref<Terminal> frame) {
 		root := new TerminalFrame(frame);
 		_parent = root;
 		root._children.append(this);
@@ -57,14 +57,14 @@ public class Panel {
 		(_height, _width) = frame.getWindowSize();
 	}
 
-	Panel(ref<Panel> parent) {
+	Tile(ref<Tile> parent) {
 		_parent = parent;
 	}
 
-	protected Panel() {
+	protected Tile() {
 	}
 
-	~Panel() {
+	~Tile() {
 		if (_parent != null) {
 			i := _parent._children.find(this);
 			if (i < _parent._children.length())
@@ -72,31 +72,31 @@ public class Panel {
 		}
 	}
 
-	public ref<Panel> left() {
+	public ref<Tile> left() {
 		if (_children.length() == 0)
 			return split(Direction.HORIZONTAL);
 		else
 			throw IllegalArgumentException("Invalid left - has children");
 	}
 
-	public ref<Panel> top() {
+	public ref<Tile> top() {
 		if (_children.length() == 0)
 			return split(Direction.VERTICAL);
 		else
 			throw IllegalArgumentException("Invalid top - has children");
 	}
 
-	public ref<Panel> next() {
+	public ref<Tile> next() {
 		if (_children.length() > 0)
 			return split(_direction);
 		else
 			throw IllegalArgumentException("Invalid next - no children");
 	}
 
-	private ref<Panel> split(Direction direction) {
+	private ref<Tile> split(Direction direction) {
 		_direction = direction;
 
-		p := new Panel(this);
+		p := new Tile(this);
 		_children.append(p);
 		return p;
 	}
@@ -123,7 +123,7 @@ public class Panel {
 	}
 }
 
-private class TerminalFrame extends Panel {
+private class TerminalFrame extends Tile {
 	private ref<Terminal> _terminal;
 
 	TerminalFrame(ref<Terminal> terminal) {
@@ -133,6 +133,15 @@ private class TerminalFrame extends Panel {
 	public ref<Terminal> terminal() {
 		return _terminal;
 	}
+}
+/**
+ * Each of the dimensions of a tile is determined in layout  
+ */
+class TileConstraints {
+	float topMargin
+	float leftMargin
+	float height
+	float width
 }
 
 

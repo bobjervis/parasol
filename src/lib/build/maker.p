@@ -398,8 +398,11 @@ class File extends Component {
 			return false;
 //		printf("%s:\n", toString());
 		for (i in _names) {
-//			printf("    [%d] %s/%s\n", i, directory, _names[i]);
-			unitFilenames.append(storage.path(packageDirectory, _names[i]));
+//			printf("    [%d] %s/%s\n", i, _src, _names[i]);
+			if (packageDirectory != null)
+				unitFilenames.append(storage.path(packageDirectory, _names[i]));
+			else
+				unitFilenames.append(storage.path(src, _names[i]));
 		}
 		return true;
 	}

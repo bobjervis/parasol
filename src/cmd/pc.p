@@ -88,8 +88,6 @@ class ParasolCommand extends process.Command {
 					"CorruptHeapException.");
 		elisionOption = booleanOption('e', "elide", "Enables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
 		semiOption = booleanOption(0, "semi-colon", "Disables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
-		recursiveOption = booleanOption('r', "recursive", "Recursively include all Parasol files in sub-directories of the directory " +
-					"containing the main file");
 		versionOption = booleanOption(0, "version", "Displays the compiler version.");
 		helpOption('?', "help",
 					"Displays this help.");
@@ -111,7 +109,6 @@ class ParasolCommand extends process.Command {
 	ref<process.Option<boolean>> versionOption;
 	ref<process.Option<boolean>> elisionOption;
 	ref<process.Option<boolean>> semiOption;
-	ref<process.Option<boolean>> recursiveOption;
 	memory.StartingHeap heap;
 	string[] includes;
 
@@ -237,7 +234,7 @@ int runCommand() {
 		return 1;
 
 	string[] args = parasolCommand.finalArguments();
-	ref<compiler.Target> target = compileContext.compile(args[0], parasolCommand.recursiveOption.set());
+	ref<compiler.Target> target = compileContext.compile(args[0]);
 	if (parasolCommand.symbolTableOption.value)
 		arena.printSymbolTable();
 	if (parasolCommand.verboseOption.value) {
