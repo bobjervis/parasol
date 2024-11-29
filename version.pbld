@@ -18,9 +18,10 @@
 	PARASOL_VERSION is the version reported by tools and the core:parasollanguage.org
 	BUILD_VERSION is the version of the build:parasollanguage.org package
 	DEBUG_VERSION is the version of the debug:parasollanguage.org package
+	TTY_VERSION is the version of the tty:parasollanguage.org package 
  */
 define(
-	PARASOL_VERSION: 0.16.0,
+	PARASOL_VERSION: 0.17.0,
 	BUILD_VERSION: 0.2.1,
 	DEBUG_VERSION: 0.1.0,
 	TTY_VERSION: 0.1.0,

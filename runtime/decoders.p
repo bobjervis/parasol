@@ -672,6 +672,7 @@ public class UTF16Decoder extends Decoder {
 /**
  * This class implements an Encoder to produce UTF-16 bytes.
  *
+ * 
  */
 public class UTF16Encoder extends Encoder {
 	/**

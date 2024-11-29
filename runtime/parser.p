@@ -1124,14 +1124,12 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		previous := _scanner.disableSemiColonElision();
 		ref<Node> e = parseEnumInstanceList();
 
 		t = _scanner.next();
 		ref<ClassDeclarator> body = _tree.newClassDeclarator(Operator.ENUM, identifier, e, enumLoc);
 		if (t == Token.RIGHT_CURLY) {
 			_scanner.pushBack(_scanner.next());
-			_scanner.restoreSemiColonElision(previous);
 			return body;
 		} else if (t != Token.SEMI_COLON) {
 			if (e.op() != Operator.SYNTAX_ERROR) {
@@ -1140,7 +1138,6 @@ public class Parser {
 				body.statement(_tree.newNodeList(err));
 			}
 		}
-		_scanner.restoreSemiColonElision(previous);
 		ref<ClassDeclarator> oldEnclosing = pushEnclosing(body);
 		parseBlock(body);
 		pushEnclosing(oldEnclosing);

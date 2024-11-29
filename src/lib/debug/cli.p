@@ -246,9 +246,11 @@ void cleanup() {
 void inputLoop() {
 	for (;;) {
 		tty.Key key;
-		int c, shifts, button, row, column;
+		int shifts, button, row, column;
+		long c
 
 		(key, c) = terminal.getKeystroke();
+//		logger.info("key %s value %x", string(key), c)
 		switch (key) {
 		case NOT_A_KEY:
 //			logger.info("NOT_A_KEY %d", c);
@@ -260,19 +262,19 @@ void inputLoop() {
 		case MouseDrag:
 		case MouseDrop:
 		case MouseReport:
-			shifts = c & 0xff;
-			button = (c >> 8) & 0xff;
-			column = (c >> 16) & 0xff;
-			row = (c >> 24) & 0xff;
+			shifts = int(c & 0xff);
+			button = int((c >> 8) & 0xff);
+			column = int((c >> 16) & 0xfff);
+			row = int((c >> 28) & 0xfff);
 			if (button != 0)
 				logger.info("%s @(%d,%d) button %d%s%s%s", string(key), row, column, button, (shifts & 1) != 0 ? " shift" : "",
 					(shifts & 2) != 0 ? " alt" : "", (shifts & 4) != 0 ? " ctl" : "");
 			break;
 
 		case MouseMove:
-			column = (c >> 16) & 0xff;
-			row = (c >> 24) & 0xff;
-//			printf("%s @(%d,%d)\r\n", string(key), row, column);
+			column = int((c >> 16) & 0xfff);
+			row = int((c >> 28) & 0xfff);
+//			logger.info("%s @(%d,%d)", string(key), row, column);
 			break;
 
 		case MouseWheel:

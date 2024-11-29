@@ -1800,6 +1800,15 @@ public class string extends String<byte> {
 	}
 }
 /**
+ * Create a formatted string and return it.
+ */
+public string sprintf(string format, var... args) {
+	string s;
+	
+	s.printf(format, args);
+	return s;
+}
+/**
  * This class contains a UTF-16 encoded string.
  *
  * While a number of methods assume UTF-16 text, a string16 is an array of char's. The documentation
@@ -2187,6 +2196,20 @@ public class string16 extends String<char> {
 		return *ref<string16>(&s);
 	}
 	/**
+	 * Write a formatted message onto the end of this string.
+	 *
+	 * @param format A format string as defined in {@link parasol:stream.Writer.printf printf}.
+	 * @param arguments Zero or more arguments, as determined by the format string.
+	 *
+	 * @return The number of chars appended to this string.
+	 */
+	public int printf(string format, var... arguments) {
+		s := sprintf(format, arguments);
+		before := length();
+		append(s);
+		return length() - before;
+	}
+	/**
 	 * store
 	 * 
 	 * This is only in generated code in those circumstances where a string returned from a function can short-
@@ -2285,7 +2308,16 @@ public class string16 extends String<char> {
 		return substring16(pointer<char>(&_contents.data) + first, last - first);
 	}
 }
-
+/**
+ * Create a formatted string and return it.
+ */
+public string16 sprintf16(string format, var... args) {
+	string16 s;
+	
+	s.printf(format, args);
+	return s;
+}
+/** @ignore */
 class String<class T> {
 	protected class allocation {
 		public int length;
@@ -2651,11 +2683,11 @@ public class StringWriter extends Writer {
 	}
 }
 /**
- * A Reader for string objects.
+ * A Reader for string16 objects.
  *
- * A StringReader can report its length and can be reset.
+ * A String16Reader can report its length and can be reset.
  *
- * A StringReader can unread the entire string at any point.
+ * A String16Reader can unread the entire string at any point.
  * Take care when unreading data so that you don't confuse the
  * char boundaries and potentially corrupt any UTF-16 data in
  * the byte stream.

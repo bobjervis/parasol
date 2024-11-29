@@ -272,6 +272,7 @@ dir(path: test/src) {
 	}
 	dir(path: text) {
 		run(filename: regex_test_1.p)
+		run(filename: sprintf_test.p)
 	}
 	dir(path: thread) {
 		run(filename: threadpool_test.p)
@@ -517,6 +518,7 @@ compile(expect: fail, message: BAD_MULTI_ASSIGN) { "int x,y; (x, y) = (1, 3);" }
 
 // Semi-colon elision tests
 
+compile() { "enum Foo { A,\nB,\nC\n int _param\n}" }
 compile() { "class Tuple { int i, j; } Tuple a = { i: 5, j: 6 }\n a.i += a.j" }
 compile() { "long b; long a = b &\n 37;" }
 compile() { "long b; long a = b |\n 37;" }

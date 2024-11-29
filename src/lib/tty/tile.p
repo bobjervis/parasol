@@ -16,6 +16,7 @@
 namespace parasollanguage.org:tty;
 
 import parasol:exception.IllegalArgumentException;
+import native:linux
 
 public enum Direction {
 	NONE,
@@ -125,6 +126,7 @@ public class Tile {
 
 private class TerminalFrame extends Tile {
 	private ref<Terminal> _terminal;
+	private Line[] _lines;
 
 	TerminalFrame(ref<Terminal> terminal) {
 		_terminal = terminal;
@@ -134,6 +136,138 @@ private class TerminalFrame extends Tile {
 		return _terminal;
 	}
 }
+
+private class Line {
+	int[] characters;						// An array of Unicode code points.
+	ref<AttributeSet>[] attributeSets;		// For each code point above, the corresponding AttributeSet that applies. If not attributes are
+											// set, these may be null. If the addresses of the AttributeSets are different, it is assumed they
+											// set some different attributes.
+}	
+
+public class AttributeSet {
+	private Attribute[] _attributes
+	private byte[] _color256			// if position N in the _attributes array is Attribute.FORE_256, or Attribute.BACK_256 this is the color index
+										// otherwise it is ignored
+	/**
+	 * Assign one or more attributes to this set. If any of these are either FORE_256 or BACK_256 this attribute is ignored.
+	 *
+	 * @param attributes The list of attributes to assign to this set.
+	 */								
+	public AttributeSet(Attribute... attributes) {
+		_attributes = attributes
+	}
+	/**
+	 * Assign one or more attributes to this set.
+	 *
+	 *
+	 * @param colors A list of zero or more 256-color palette indices.
+	 * Each color corresponds to either a FORE_256 or BACK_256 attribute in the attributes list.  
+	 * If too many are listed for the number of attributes
+	 * provided, the excess is ignored. If too few are listed for the number of attributes, the attributes
+	 * are assigned until they run out and any further FORE_256 or BACK_256 attributes are ignored.
+	 *
+	 * @param attributes The list of attributes to assign to this set.
+	 */
+	public AttributeSet(byte[] colors, Attribute... attributes) {
+		color_index := 0
+		for (i in attributes) {
+			a := attributes[i]
+			switch (a) {
+			case FORE_256:
+			case BACK_256:
+				if (color_index < colors.length()) {
+					_attributes.append(a)
+					_color256.append(colors[color_index++])
+				}
+				break
+				
+			default:
+				_attributes.append(a)
+				_color256.append(0)
+			}		
+		}
+	}
+	
+	public void write(int fd) {
+		for (i in _attributes) {
+			a := _attributes[i]
+			switch (a) {
+			case FORE_256:
+			case BACK_256:
+				if (i < _color256.length()) {
+					s := sprintf("\x1b[%d;5;%dm", a == Attribute.FORE_256 ? 38 : 48, _color256[i])
+					linux.write(fd, &s[0], s.length())
+				}
+				break
+				
+			default:
+				a.write(fd)
+			} 
+		}
+	}
+}
+	
+public enum Attribute {
+	NORMAL(0),
+	BOLD(1),
+	FAINT(2),
+	ITALIC(3),
+	UNDERLINED(4),
+	BLINK(5),
+	INVERSE(7),
+	INVISIBLE(8),
+	CROSSED_OUT(9),
+	DOUBLE_UNDERLINED(21),
+	
+	// 8 color palette
+	
+	FORE_BLACK(30),
+	FORE_RED(31),
+	FORE_GREEN(32),
+	FORE_TELLOW(33),
+	FORE_BLUE(34),
+	FORE_MAGENTA(35),
+	FORE_CYAN(36),
+	FORE_WHITE(37),
+	FORE_DEFAULT(39),
+	
+	BACK_BLACK(40),
+	BACK_RED(41),
+	BACK_GREEN(42),
+	BACK_TELLOW(43),
+	BACK_BLUE(44),
+	BACK_MAGENTA(45),
+	BACK_CYAN(46),
+	BACK_WHITE(47),
+	BACK_DEFAULT(49),
+
+	// 16 color palette
+	
+	BRIGHT_FORE_BLACK(90),
+	BRIGHT_FORE_RED(91),
+	BRIGHT_FORE_GREEN(92),
+	BRIGHT_FORE_TELLOW(93),
+	BRIGHT_FORE_BLUE(94),
+	BRIGHT_FORE_MAGENTA(95),
+	BRIGHT_FORE_CYAN(96),
+	BRIGHT_FORE_WHITE(97),
+	BRIGHT_FORE_DEFAULT(99),
+	
+	FORE_256(0),
+	BACK_256(0);
+
+	private int _value
+	
+	Attribute(int value) {
+		_value = value
+	}
+	
+	void write(int fd) {
+		sequence := sprintf("\x1b[%dm", _value)
+		linux.write(fd, &sequence[0], sequence.length())
+	} 
+}
+ 
 /**
  * Each of the dimensions of a tile is determined in layout  
  */

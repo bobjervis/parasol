@@ -35,6 +35,8 @@ import parasol:text.string;
 import parasol:text.substring;
 import parasol:text.string16;
 import parasol:text.substring16;
+import parasol:text.sprintf;
+import parasol:text.sprintf16;
 import parasol:types.var;
 import parasol:types.address;
 import parasol:types.boolean;

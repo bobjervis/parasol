@@ -13,13 +13,42 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This package provides facilities for manipulating a Linux xterm console for construction of
+ * character-based windowing applications with controls, overlapping windows in the terminal's display area
+ *
+ * The terminal interactions assume the default configuration of seven-bit escape sequences.
+ *
+ * Documentation of the supported commands and responses are found a
+ *
+ * <pre>
+ *            https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+ * </pre>
+ *
+ * In that document, the following abbreviations are implemented as:
+ * <ul>
+ *    <li>APC Application Program Control - Escape _
+ *    <li>CSI Control Sequence Introducer - Escape [
+ *    <li>DCS Device Control String - Escape P
+ *    <li>ST String Terminaotr - Escape \
+ * </ul>
+ *
+ * Rectanguler regions of the console screen are defined as an instance of an object with Tile or
+ * some derived class. These Tile's are arranged in a heirarchy such that all text written to a child Tile will
+ * over write a portion of the parent Tile's display area.
+ */
 namespace parasollanguage.org:tty;
 
+import parasol:exception
+import parasol:log
 import parasol:runtime;
 import parasol:time;
 import native:linux;
 
+logger := log.getLogger("tty")
+
 time.Duration doubleClickElapsed(0, 500000000);
+time.Duration phantomClickElapsed(0, 200000000);
 
 public enum Key {
 	NOT_A_KEY,
@@ -77,14 +106,15 @@ public class Terminal {
 	private int _fdi;						// File descriptor to use for input
 	private int _fdo;						// File descriptor to use for output
 	private boolean _inRaw;
-	private ref<State> _inputState;
-	private ButtonState _buttonState;
-	private int _lastRow;
+	private ref<State> _inputState;			// The input state of the state machine that interprets input escape sequences
+	private ButtonState _buttonState;		// Mouse button state - only one button reports as 'down' at any given time
+	private int _lastRow;					
 	private int _lastColumn;
 	private time.Time _dblClickExpiration;
+	private time.Time _phantomClickExpiration;
 	private boolean _dragging;				// Set on 2nd button down event, with a change of x,y
 	private Key _pushbackKey;
-	private int _pushbackExtra;
+	private long _pushbackExtra;
 
 	public Terminal(int fdi, int fdo) {
 		_fdi = fdi;
@@ -96,6 +126,7 @@ public class Terminal {
 		linux.cfmakeraw(&_termiosRaw);
 		_inputState = &rootState;
 		_dblClickExpiration = time.Time.MIN_VALUE;
+		_phantomClickExpiration = time.Time.MIN_VALUE;
 		linux.sigaction(linux.SIGWINCH, null, &oldWinchAction);
 	}
 
@@ -169,11 +200,11 @@ public class Terminal {
 	}
 
 	public void enableMouseTracking() {
-		send("\x1b[?1003h");
+		send("\x1b[?1003h\x1b[?1006h");
 	}
 
 	public void disableMouseTracking() {
-		send("\x1b[?1003l");
+		send("\x1b[?1006l\x1b[?1003l");
 	}
 
 	public void gotoStartOfLine() {
@@ -183,8 +214,32 @@ public class Terminal {
 	private void send(string s) {
 		linux.write(_fdo, s.c_str(), s.length());
 	}
-
-	public Key, int getKeystroke() {
+	/**
+	 * Get a single keystroke or mouse event
+	 *
+	 * Note: Mouse event processing is messy in part because there appear to be
+	 * 'phantom' mouse down events. That is to say, when you click a mouse button,
+	 * two events should be generated: a mouse down followed by a mouse up.
+	 * Unfortunately, in some but not all cases the second event registers as a
+	 * second mouse down event.
+	 *
+	 * Consequently, the logic below uses a timer to determine whether consecutive
+	 * mouse down events are actually one click not two.
+	 *
+	 * @return The key event name. Note that Key.NOT_A_KEY can arise from any of several
+	 * internal conditions where bytes are returned from the input fd, but they should be ignored.
+	 * In particular, if the bytes are part of an input escape sequence, the characters in the
+	 * escape sequence are themsleves consumed with the NOT_A_KEY return value being returned instead.
+	 *
+	 * @return Additional event data. In particular, this value contains the details of a mouse event.
+	 * For a mouse event the low order 8 bits contain shift information: 0x01 for shift, 0x02 for control
+	 * and 0x04 for alt. The bits from 8 through 15 contains the button that is down. Only one button will
+	 * be present. 0 indicates no buttons, 1 is the primary mouse button (usually left), 3 is the secondary
+	 * mouse button (usually right) and 2 would be the middle mouse button on three button mice, or a lick
+	 * of the mouse wheel on a wheel mouse. The character column occupies bits 16 through 27 and the 
+	 * character row occupies bits 28 through 39. 
+	 */
+	public Key, long getKeystroke() {
 		if (_pushbackKey != Key.NOT_A_KEY) {
 			k := _pushbackKey;
 			_pushbackKey = Key.NOT_A_KEY;
@@ -199,10 +254,8 @@ public class Terminal {
 			return Key.EOF, 0;
 
 		if (actual < 0)
-			return Key.NOT_A_KEY, linux.errno()
+			return Key.NOT_A_KEY, -linux.errno()
 		
-//		printf("c = %x '%c'\r\n", c, c);
-
 		if (_inputState == null)
 			return Key.CodePoint, c;
 
@@ -212,26 +265,64 @@ public class Terminal {
 				_inputState = &rootState;
 				switch (key) {
 				case MouseReport:
-					linux.read(_fdi, &c, 1);
-					mouseState := c;
-					linux.read(_fdi, &c, 1);
-					column := c - ' ';
-					linux.read(_fdi, &c, 1);
-					row := c - ' ';
-					if ((mouseState & 0x60) == 0x60) {
+					string inputs
+					for (;;) {
+						linux.read(_fdi, &c, 1)
+						if (c == 'M' || c == 'm')
+							break
+						inputs.append(byte(c))
+					}
+					parts := inputs.split(';')
+//					logger.info("inputs = %s", inputs)
+					if (parts.length() != 3)
+						return Key.NOT_A_KEY, 0
+					int mouseState, column, row
+//					logger.info("parts = '%s' '%s' '%s'", parts[0], parts[1], parts[2])
+					boolean success
+					(mouseState, success) = int.parse(parts[0])
+					if (!success)
+						return Key.NOT_A_KEY, 4
+					(column, success) = int.parse(parts[1]) 
+					if (!success)
+						return Key.NOT_A_KEY, 5
+					(row, success) = int.parse(parts[2])
+					if (!success)
+						return Key.NOT_A_KEY, 6
+					
+//					logger.info("mouseState = %x row = %d column = %d", mouseState, row, column)
+					if ((mouseState & 0x40) == 0x40) {
 						// wheel direction from the low two bits is 0 for 'scroll up' and 1 for 'scroll down'
 						return Key.MouseWheel, mouseState & 3; 
 					}
 					button := (mouseState + 1) & 3;
 					shifts := (mouseState >> 2) & 0x7;
-//					printf("{%d,%d} button %d shifts %d%s\r\n", row, column, button, shifts, _dragging ? " dragging" : "");
+//					logger.info("{%d,%d} button %d shifts %d%s button state %s", row, column, button, shifts, _dragging ? " dragging" : "", string(_buttonState));
+
 					if (button != 0) { // button 1 is the 'primary' (typically left) button, 3 is the 'secondary' (typically right) button.
 										// Note that for 3 button mice, button 2 is the middle button.
 										// This is a button-down event
 						if (_buttonState == ButtonState(button)) { // a continuation of the mouse moving while the button continues to be down
 							// not likely to happen, this is an event for the same button down and same row and column - a no op
-							if (_lastRow == row && _lastColumn == column)
-								return Key.NOT_A_KEY, 0;
+							// however, the mouse driver seems to sometimes omit the up event - making this very difficult to tell apart from
+							// a 'drag' event that doesn't move the mouse enough to detect a change in location.
+							if (_lastRow == row && _lastColumn == column) {
+								t := time.Time.now();
+//								logger.info("phantom %6.3f double %6.3f time %6.3f", _phantomClickExpiration.milliseconds() / 1000.0, _dblClickExpiration.milliseconds() / 1000.0,
+//											t.milliseconds() / 1000.0)
+								if (_phantomClickExpiration > t) {
+									_phantomClickExpiration = time.Time.MIN_VALUE;
+									return Key.NOT_A_KEY, 8;
+								}
+								if (_dblClickExpiration > t) {
+									_dblClickExpiration = time.Time.MIN_VALUE;
+									_phantomClickExpiration = t.plus(phantomClickElapsed);
+									_buttonState = ButtonState.UP
+									return Key.MouseDoubleClick, (long(row) << 28) + (column << 16) + (button << 8) + shifts;
+								}
+								_phantomClickExpiration = time.Time.now().plus(phantomClickElapsed);
+								_dblClickExpiration = time.Time.now().plus(doubleClickElapsed);
+								return Key.MouseClick, (long(row) << 28) + (column << 16) + (int(_buttonState) << 8) + shifts;
+							}
 							_dblClickExpiration = time.Time.MIN_VALUE;
 							if (!_dragging) {
 								_dragging = true;
@@ -239,12 +330,12 @@ public class Terminal {
 								downColumn := _lastColumn;
 								_lastRow = row;
 								_lastColumn = column;
-								pushback(Key.MouseDrag, (row << 24) + (column << 16) + (button << 8) + shifts);
-								return Key.MouseDown, (downRow << 24) + (downColumn << 16) + (button << 8) + shifts;
+								pushback(Key.MouseDrag, (long(row) << 24) + (column << 16) + (button << 8) + shifts);
+								return Key.MouseDown, (long(downRow) << 28) + (downColumn << 16) + (button << 8) + shifts;
 							}
 							_lastRow = row;
 							_lastColumn = column;
-							return Key.MouseDrag, (row << 24) + (column << 16) + (button << 8) + shifts;
+							return Key.MouseDrag, (long(row) << 28) + (column << 16) + (button << 8) + shifts;
 						}
 						if (_buttonState != ButtonState.UP) { // we somehow switched buttons between reported events
 							// this is a button down switching buttons, there is an implied up event for the previously down button
@@ -255,16 +346,19 @@ public class Terminal {
 									clickButton := int(_buttonState);
 									_buttonState = ButtonState(button);
 									_dragging = false;
-									return Key.MouseClick, (_lastRow << 24) + (_lastColumn << 16) + (clickButton << 8) + shifts;
+									shifts = 5
+									return Key.MouseClick, (long(_lastRow) << 28) + (_lastColumn << 16) + (clickButton << 8) + shifts;
 								}
-								pushback(Key.MouseDrag, (row << 24) + (column << 16) + (button << 8) + shifts);
-								return Key.MouseDrop, (_lastRow << 24) + (_lastColumn << 16) + (int(_buttonState) << 8) + shifts;
+								pushback(Key.MouseDrag, (row << 28) + (column << 16) + (button << 8) + shifts);
+								return Key.MouseDrop, long(_lastRow << 28) + (_lastColumn << 16) + (int(_buttonState) << 8) + shifts;
 							}
 						}
-						t := time.Time.now();
 						if (_dblClickExpiration > time.Time.now()) {
+							_phantomClickExpiration = time.Time.now().plus(phantomClickElapsed);
 							_dblClickExpiration = time.Time.MIN_VALUE;
-							return Key.MouseDoubleClick, (row << 24) + (column << 16) + (button << 8) + shifts;
+							_buttonState = ButtonState.UP
+							shifts = 7
+							return Key.MouseDoubleClick, (long(row) << 28) + (column << 16) + (button << 8) + shifts;
 						}
 						_buttonState = ButtonState(button);
 						_dragging = false;
@@ -278,7 +372,7 @@ public class Terminal {
 							_lastRow = row;
 							_lastColumn = column;
 							_dblClickExpiration = time.Time.MIN_VALUE;
-							return Key.MouseMove, (row << 24) + (column << 16);
+							return Key.MouseMove, (long(row) << 28) + (column << 16);
 						}
 					} else { // this is a button up event, could be a click, could be a drop
 						lastButtonDown := _buttonState;
@@ -286,15 +380,22 @@ public class Terminal {
 						if (_dragging) {
 							_dragging = false;
 							_dblClickExpiration = time.Time.MIN_VALUE;
-							return Key.MouseDrop, (row << 24) + (column << 16) + (int(lastButtonDown) << 8) + shifts;
+							return Key.MouseDrop, (long(row) << 28) + (column << 16) + (int(lastButtonDown) << 8) + shifts;
 						}
 						if (_lastRow == row && _lastColumn == column) {
-							_dblClickExpiration = time.Time.now().plus(doubleClickElapsed);
-							return Key.MouseClick, (row << 24) + (column << 16) + (int(lastButtonDown) << 8) + shifts;
+							t := time.Time.now();
+							if (_phantomClickExpiration > t) {
+								_phantomClickExpiration = time.Time.MIN_VALUE;
+								return Key.NOT_A_KEY, 8;
+							}
+							_phantomClickExpiration = t.plus(phantomClickElapsed);
+							_dblClickExpiration = t.plus(doubleClickElapsed);
+							shifts = 6
+							return Key.MouseClick, (long(row) << 28) + (column << 16) + (int(lastButtonDown) << 8) + shifts;
 						} else {
 							_dblClickExpiration = time.Time.MIN_VALUE;
-							pushback(Key.MouseDrop, (row << 24) + (column << 16) + (int(lastButtonDown) << 8) + shifts);
-							return Key.MouseDown, (_lastRow << 24) + (_lastColumn << 16) + (int(lastButtonDown) << 8) + shifts;
+							pushback(Key.MouseDrop, (long(row) << 28) + (column << 16) + (int(lastButtonDown) << 8) + shifts);
+							return Key.MouseDown, (long(_lastRow) << 28) + (_lastColumn << 16) + (int(lastButtonDown) << 8) + shifts;
 						}
 					}
 
@@ -302,7 +403,7 @@ public class Terminal {
 					return key, 0;
 				}
 			}
-//			printf("    matched %x '%c'\n", c, c);
+//			logger.info("    matched %x '%c'", c, c);
 			_inputState = _inputState.successorMap[c];
 			return Key.NOT_A_KEY, 2;
 		} else {
@@ -311,7 +412,7 @@ public class Terminal {
 		}
 	}
 
-	void pushback(Key key, int extra) {
+	void pushback(Key key, long extra) {
 		_pushbackKey = key;
 		_pushbackExtra = extra;
 	}
@@ -320,7 +421,7 @@ public class Terminal {
 private void buildKeyStateMachine() {
 	key(Key.LeftArrow,  "\x1b[D");
 	key(Key.RightArrow, "\x1b[C");
-	key(Key.MouseReport, "\x1b[M");
+	key(Key.MouseReport, "\x1b[<");
 }
 
 private void key(Key key, string sequence) {
