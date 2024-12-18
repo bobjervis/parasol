@@ -545,10 +545,10 @@ class File {
 }
 
 public class DebugStack extends runtime.VirtualStack {
-	private ref<ThreadInfo> _thread;
+	private ref<TracedThread> _thread;
 	private long _pthread_create_address
 	
-	DebugStack(ref<ThreadInfo> t) {
+	DebugStack(ref<TracedThread> t) {
 		super(0, 0);
 		_thread = t;
 		regs := t.registers();

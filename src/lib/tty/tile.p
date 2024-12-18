@@ -13,9 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasollanguage.org:tty;
+namespace parasollanguage.org:tty
 
-import parasol:exception.IllegalArgumentException;
+import parasol:exception
 import native:linux
 
 public enum Direction {
@@ -53,8 +53,8 @@ public class Tile {
 		root := new TerminalFrame(frame);
 		_parent = root;
 		root._children.append(this);
-		_x = 1;
-		_y = 1;
+		_x = 0;
+		_y = 0;
 		(_height, _width) = frame.getWindowSize();
 	}
 
@@ -77,21 +77,21 @@ public class Tile {
 		if (_children.length() == 0)
 			return split(Direction.HORIZONTAL);
 		else
-			throw IllegalArgumentException("Invalid left - has children");
+			throw exception.IllegalArgumentException("Invalid left - has children");
 	}
 
 	public ref<Tile> top() {
 		if (_children.length() == 0)
 			return split(Direction.VERTICAL);
 		else
-			throw IllegalArgumentException("Invalid top - has children");
+			throw exception.IllegalArgumentException("Invalid top - has children");
 	}
 
 	public ref<Tile> next() {
 		if (_children.length() > 0)
 			return split(_direction);
 		else
-			throw IllegalArgumentException("Invalid next - no children");
+			throw exception.IllegalArgumentException("Invalid next - no children");
 	}
 
 	private ref<Tile> split(Direction direction) {
@@ -122,6 +122,18 @@ public class Tile {
 	public Direction direction() {
 		return _direction;
 	}
+	
+	public void write(int x, int y, string text) {
+	}
+	
+	public void write(string text) {
+	}
+	
+	public void write(int x, int y, ref<AttributeSet> attributes, string text) {
+	}
+	
+	public void write(ref<AttributeSet> attributes, string text) {
+	}
 }
 
 private class TerminalFrame extends Tile {
@@ -138,14 +150,18 @@ private class TerminalFrame extends Tile {
 }
 
 private class Line {
-	int[] characters;						// An array of Unicode code points.
-	ref<AttributeSet>[] attributeSets;		// For each code point above, the corresponding AttributeSet that applies. If not attributes are
+	int[] characters						// An array of Unicode code points.
+	ref<AttributeSet>[] attributeSets		// For each code point above, the corresponding AttributeSet that applies. If not attributes are
 											// set, these may be null. If the addresses of the AttributeSets are different, it is assumed they
 											// set some different attributes.
 }	
 
 public class AttributeSet {
-	private Attribute[] _attributes
+	private Attribute _style
+	private Attribute _fore
+	private byte _foreColor
+	private Attribute _back
+	private byte _backColor
 	private byte[] _color256			// if position N in the _attributes array is Attribute.FORE_256, or Attribute.BACK_256 this is the color index
 										// otherwise it is ignored
 	/**
@@ -154,7 +170,8 @@ public class AttributeSet {
 	 * @param attributes The list of attributes to assign to this set.
 	 */								
 	public AttributeSet(Attribute... attributes) {
-		_attributes = attributes
+		byte[] b
+		init(b, attributes)
 	}
 	/**
 	 * Assign one or more attributes to this set.
@@ -169,40 +186,142 @@ public class AttributeSet {
 	 * @param attributes The list of attributes to assign to this set.
 	 */
 	public AttributeSet(byte[] colors, Attribute... attributes) {
-		color_index := 0
+		init(colors, attributes);
+	}
+
+	private void init(byte[] colors, Attribute[] attributes) {
+		int color_index
+		boolean styleSet, foreSet, backSet
+		// _style is Attribute.NORMAL by default
+		_fore = Attribute.FORE_DEFAULT
+		_back = Attribute.BACK_DEFAULT
 		for (i in attributes) {
 			a := attributes[i]
 			switch (a) {
+			case NORMAL:
+			case BOLD:
+			case FAINT:
+			case ITALIC:
+			case UNDERLINED:
+			case BLINK:
+			case INVERSE:
+			case INVISIBLE:
+			case CROSSED_OUT:
+			case DOUBLE_UNDERLINED:
+				if (styleSet)
+					throw exception.IllegalArgumentException("Too many style attributes: " + string(a))
+				styleSet = true
+				_style = a
+				break;
+				
+			// 8 color palette
+	
+			case FORE_BLACK:
+			case FORE_RED:
+			case FORE_GREEN:
+			case FORE_TELLOW:
+			case FORE_BLUE:
+			case FORE_MAGENTA:
+			case FORE_CYAN:
+			case FORE_WHITE:
+			case FORE_DEFAULT:
+
+			// 16 color palette
+	
+			case BRIGHT_FORE_BLACK:
+			case BRIGHT_FORE_RED:
+			case BRIGHT_FORE_GREEN:
+			case BRIGHT_FORE_TELLOW:
+			case BRIGHT_FORE_BLUE:
+			case BRIGHT_FORE_MAGENTA:
+			case BRIGHT_FORE_CYAN:
+			case BRIGHT_FORE_WHITE:
+			case BRIGHT_FORE_DEFAULT:
+				if (foreSet)
+					throw exception.IllegalArgumentException("Too many foreground colors: " + string(a))
+				foreSet = true
+				_fore = a
+				break;
+					
+			case BACK_BLACK:
+			case BACK_RED:
+			case BACK_GREEN:
+			case BACK_TELLOW:
+			case BACK_BLUE:
+			case BACK_MAGENTA:
+			case BACK_CYAN:
+			case BACK_WHITE:
+			case BACK_DEFAULT:
+				if (backSet)
+					throw exception.IllegalArgumentException("Too many background colors: " + string(a))
+				backSet = true
+				_back = a
+	
 			case FORE_256:
-			case BACK_256:
 				if (color_index < colors.length()) {
-					_attributes.append(a)
-					_color256.append(colors[color_index++])
+					if (foreSet)
+						throw exception.IllegalArgumentException("Too many foreground colors: " + string(a))
+					foreSet = true
+					_fore = a
+					_foreColor = colors[color_index++]
 				}
 				break
 				
-			default:
-				_attributes.append(a)
-				_color256.append(0)
+			case BACK_256:
+				if (color_index < colors.length()) {
+					if (backSet)
+						throw exception.IllegalArgumentException("Too many background colors: " + string(a))
+					backSet = true
+					_back = a
+					_backColor = colors[color_index++]
+				}
+				break
 			}		
 		}
 	}
 	
 	public void write(int fd) {
-		for (i in _attributes) {
-			a := _attributes[i]
-			switch (a) {
-			case FORE_256:
-			case BACK_256:
-				if (i < _color256.length()) {
-					s := sprintf("\x1b[%d;5;%dm", a == Attribute.FORE_256 ? 38 : 48, _color256[i])
+		write(fd, null)
+	}
+	
+	public void write(int fd, ref<AttributeSet> prior) {
+		if (prior == this)
+			return
+		if (prior == null) {
+			_style.write(fd);
+			if (_fore == Attribute.FORE_256) {
+				s := sprintf("\x1b[38;5;%dm", _foreColor)
+				linux.write(fd, &s[0], s.length())
+			} else
+				_fore.write(fd)
+			if (_back == Attribute.BACK_256) {
+				s := sprintf("\x1b[48;5;%dm", _backColor)
+				linux.write(fd, &s[0], s.length())
+			} else
+				_back.write(fd)
+		} else {
+			if (prior._style != _style)
+				_style.write(fd)
+			if (prior._fore != _fore) {
+				if (_fore == Attribute.FORE_256) {
+					s := sprintf("\x1b[38;5;%dm", _foreColor)
 					linux.write(fd, &s[0], s.length())
-				}
-				break
-				
-			default:
-				a.write(fd)
-			} 
+				} else
+					_fore.write(fd)
+			} else if (_fore == Attribute.FORE_256 && prior._foreColor != _foreColor) {
+				s := sprintf("\x1b[38;5;%dm", _foreColor)
+				linux.write(fd, &s[0], s.length())
+			}
+			if (prior._back != _back) {
+				if (_back == Attribute.BACK_256) {
+					s := sprintf("\x1b[48;5;%dm", _backColor)
+					linux.write(fd, &s[0], s.length())
+				} else
+					_back.write(fd)
+			} else if (_back == Attribute.BACK_256 && prior._backColor != _backColor) {
+				s := sprintf("\x1b[48;5;%dm", _backColor)
+				linux.write(fd, &s[0], s.length())
+			}
 		}
 	}
 }
@@ -254,7 +373,7 @@ public enum Attribute {
 	BRIGHT_FORE_DEFAULT(99),
 	
 	FORE_256(0),
-	BACK_256(0);
+	BACK_256(0)
 
 	private int _value
 	

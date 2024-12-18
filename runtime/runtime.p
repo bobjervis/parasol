@@ -949,12 +949,13 @@ public class VirtualStack {
 			printf("WARN: Unexpected starting point for an application %s %s\n", string(candidates[1].type), candidates[1].symbol);
 		}
 		
-			printf("frames:      RSP     \n");
+		printf("frames:      RBP     \n");
 		for (i in frames) {
 			f := &frames[i];
 			printf("  [%3d] %x %s\n", i, f.rbp, f.symbol);
 		}
 		printf("RBP = %p\n", rbp);
+//		lowestRbp = 
 		boolean frameChainDetected;
 		long previousFrame;
 		for (i in candidates) {
@@ -1109,7 +1110,7 @@ public class VirtualStack {
  *
  * If this process is not connected with fd 0 to a terminal, this will return -1 as each size. 
  */
-public int, int terminalSize() {
+public int, int terminalSize(int fd) {
 	if (compileTarget == Target.X86_64_WIN) {
 //		CONSOLE_SCREEN_BUFFER_INFO screenBuffer;
 
@@ -1122,8 +1123,10 @@ public int, int terminalSize() {
 	} else if (compileTarget == Target.X86_64_LNX) {
 		linux.winsize size;
 
-		linux.ioctl(0, linux.TIOCGWINSZ, &size);
-
+		result := linux.ioctl(fd, linux.TIOCGWINSZ, &size);
+		if (result < 0)
+			return -1, -1;
+			
 		return size.ws_row, size.ws_col;
 	}
 	return -1, -1;

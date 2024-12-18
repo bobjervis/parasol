@@ -360,7 +360,9 @@ public class Command {
 		int rows;
 		int lineLength;
 
-		(rows, lineLength) = runtime.terminalSize();
+		(rows, lineLength) = runtime.terminalSize(0);
+		if (lineLength < 0)
+			lineLength = 80;
  		printf("Use is: ");
 		helpDetails(lineLength, 0, 8, 8);
 		exit(1);

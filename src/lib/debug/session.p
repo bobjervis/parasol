@@ -41,6 +41,11 @@ public interface SessionNotifications {
 	 */
 	void killed(time.Time at, ProcessInfo info, int killSig);
 	/**
+	 * The thread described by the process info and the thread id has stopped because of
+	 * the given stop signal.
+	 */ 
+	void stopped(time.Time at, ProcessInfo info, int tid, int stopSig)
+	/**
 	 * The debug manager has been commanded to shut down. The sessions that receive
 	 * this message may no longer reliably send messages to the SessionCommands	
 	 * proxy.
@@ -72,7 +77,7 @@ public interface SessionCommands {
 
 	ProcessInfo[] getProcesses();
 
-	ThreadInfo[] getThreads(int pid, unsigned ip)
+	ThreadInfo[], boolean getThreads(int pid, unsigned ip)
 	/**
 	 * Collect oneor more logs
 	 */
@@ -94,6 +99,7 @@ public class ProcessInfo {
 public class ThreadInfo {
 	public int tid
 	public ProcessState state
+	public int stopSig			// If the state is STOPPED, this is why
 	public int exitStatus
 }
 

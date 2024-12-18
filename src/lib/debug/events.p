@@ -81,7 +81,7 @@ monitor class EventActions {
 	class Event {
 		ref<Monitor> _monitor;
 
-		boolean checkThread(ref<ThreadInfo> t) {
+		boolean checkThread(ref<TracedThread> t) {
 			return false;
 		}
 	}
@@ -94,7 +94,7 @@ monitor class EventActions {
 			_monitor = m;
 		}
 
-		boolean checkThread(ref<ThreadInfo> t) {
+		boolean checkThread(ref<TracedThread> t) {
 			if (_process == t.process()) {
 				if (_process.state() != manager.ProcessState.RUNNING) {
 //					logger.info("checkThread tid %d %s pid %d %s", t.tid(), string(t.state()), _process.id(), string(_process.state()));
@@ -115,14 +115,13 @@ monitor class EventActions {
 			_events.append(new ProcessStoppedEvent(p, m));
 	}
 
-	void reportThreadStopped(ref<ThreadInfo> t) {
+	void reportThreadStopped(ref<TracedThread> t) {
 		for (i in _events) {
 			e := _events[i];
 			if (e.checkThread(t)) {
 				_events.remove(i);
 				delete e;
 			}
-
 		}
 	}
 }
@@ -185,6 +184,7 @@ private void eventsHandler(address unused) {
 //				pauseBeforeContinue = true;
 			case STOP:
 				n := controlState.notifier();
+				logger.info("Trying to notify manager: %p.stopped(pid %d, tid %d extra %d", n, p.id(), tid, extra)
 				if (n != null)
 					n.stopped(now, p.id(), tid, extra);
 				if (t != null)
@@ -273,7 +273,7 @@ class TracedProcess extends debug.Process {
 										// while the faul diagnosis is underway,
 	boolean _stale;
 
-	map<ref<ThreadInfo>, int> _threads;
+	map<ref<TracedThread>, int> _threads;
 
 	public boolean ping() lock (*this) {
 		logger.info("Pong!");
@@ -291,7 +291,7 @@ class TracedProcess extends debug.Process {
 		return exitCleanup();
 	}
 
-	void exitedFromSigkill(ref<ThreadInfo> t) lock (*this) {
+	void exitedFromSigkill(ref<TracedThread> t) lock (*this) {
 		_exitCode = 0;
 		_killSig = linux.SIGKILL;
 		exitCleanup();
@@ -327,7 +327,7 @@ class TracedProcess extends debug.Process {
 		}
 	}
 
-	public boolean reportExec(ref<ThreadInfo> t) lock (*this) {
+	public boolean reportExec(ref<TracedThread> t) lock (*this) {
 		t.reportStopped(0);
 		de := interpretExec();
 		switch (de) {
@@ -370,7 +370,7 @@ class TracedProcess extends debug.Process {
 			logger.error("Process %d has a new (duplicate) thread %d", id(), tid);
 			return -1;
 		}
-		t := new ThreadInfo(this, tid);
+		t := new TracedThread(this, tid);
 		controlState.declareThread(t);
 		_threads[tid] = t;
 		if (controlState.pullStoppedThread(tid)) {
@@ -385,7 +385,7 @@ class TracedProcess extends debug.Process {
 		return tid;
 	}
 
-	public void clearSignal(ref<ThreadInfo> t) lock (*this) {
+	public void clearSignal(ref<TracedThread> t) lock (*this) {
 		t.clearSignal();
 		_hardFault = false;
 	}
@@ -394,12 +394,12 @@ class TracedProcess extends debug.Process {
 		return _threads.contains(tid);
 	}
 
-	public ref<ThreadInfo> getThread(int tid) lock (*this) {
+	public ref<TracedThread> getThread(int tid) lock (*this) {
 		return _threads[tid];
 	}
 
-	public ThreadInfo[] getThreads() lock (*this) {
-		ThreadInfo[] results;
+	public TracedThread[] getThreads() lock (*this) {
+		TracedThread[] results;
 		for (tid in _threads) {
 			t := _threads[tid];
 			if (t.state() != manager.ProcessState.EXITED)
@@ -548,7 +548,7 @@ class TracedProcess extends debug.Process {
 	}
 }
 
-public class ThreadInfo {
+public class TracedThread {
 	private ref<TracedProcess> _process;
 	private int _tid;
 	private manager.ProcessState _state;
@@ -558,7 +558,7 @@ public class ThreadInfo {
 	private int _stopSig;
 	private linux.user_regs_struct _registers;
 
-	ThreadInfo(ref<TracedProcess> process, int tid) {
+	TracedThread(ref<TracedProcess> process, int tid) {
 		_process = process;
 		_tid = tid;
 		_state = manager.ProcessState.RUNNING;
@@ -566,10 +566,10 @@ public class ThreadInfo {
 		_stale = true;
 	}
 
-	public ThreadInfo() {
+	public TracedThread() {
 	}
 
-	ThreadInfo(ref<ThreadInfo> source) {
+	TracedThread(ref<TracedThread> source) {
 		*this = *source;
 	}
 
@@ -773,9 +773,9 @@ public class ThreadInfo {
 }
 
 class HardFault extends TracerWorkItem {
-	ref<ThreadInfo> _thread;
+	ref<TracedThread> _thread;
 
-	HardFault(ref<ThreadInfo> t) {
+	HardFault(ref<TracedThread> t) {
 		_thread = t;
 	}
 
@@ -803,9 +803,9 @@ class HardFault extends TracerWorkItem {
 private boolean sawInitialStop;
 
 class InitialStop extends TracerWorkItem {
-	ref<ThreadInfo> _thread;
+	ref<TracedThread> _thread;
 
-	InitialStop(ref<ThreadInfo> t) {
+	InitialStop(ref<TracedThread> t) {
 		_thread = t;
 	}
 
@@ -847,9 +847,9 @@ class NewThread extends TracerWorkItem {
 }
 
 class Syscall extends TracerWorkItem {
-	ref<ThreadInfo> _thread;
+	ref<TracedThread> _thread;
 
-	Syscall(ref<ThreadInfo> t) {
+	Syscall(ref<TracedThread> t) {
 		_thread = t;
 	}
 
@@ -877,10 +877,10 @@ class InitialExec extends TracerWorkItem {
 }
 
 class ExitCalled extends TracerWorkItem {
-	ref<ThreadInfo> _thread;
+	ref<TracedThread> _thread;
 	time.Instant _now;
 
-	ExitCalled(ref<ThreadInfo> t, time.Instant now) {
+	ExitCalled(ref<TracedThread> t, time.Instant now) {
 		_thread = t;
 		_now = now;
 	}

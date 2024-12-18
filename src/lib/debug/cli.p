@@ -122,6 +122,8 @@ int PROC_STAT_COLUMNS		= 44;	// expected number of columns of data to be reporte
 //Notifier notifier;
 ref<tty.Terminal> terminal;
 ref<tty.Tile> mainWindow;
+tty.AttributeSet 
+
 ref<Monitor> cliDone;
 string managerUrl
 boolean shuttingDown
@@ -201,12 +203,12 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 	if (processes.length() > 0) {
 		for (i in processes) {
 			p := &processes[i]
+			logger.info("Process %d (%s) in state %s exit status %d.", p.pid, p.label, string(p.state), p.exitStatus)
 			switch (p.state) {
 			case STOPPED:
 				process.stderr.printf("Process %d (%s) has stopped.\r\n", p.pid, p.label)
-
-			default:
-				logger.info("Process %d (%s) in state %s exit status %d.", p.pid, p.label, string(p.state), p.exitStatus)
+				//
+				// this is the initial stop for the main process. 
 			}
 		}
 	} else
@@ -365,6 +367,12 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 		process.stderr.printf("Process %d (%s) has stopped after a system exec call.\r\n", info.pid, info.label);
 	}
 
+	void stopped(time.Time at, manager.ProcessInfo info, int tid, int stopSig) {
+		logger.format(at, log.INFO, "Process %d (%s) thread %d has stopped after signal %d", info.pid, info.label, tid, stopSig)
+		if (stopSig != linux.SIGSTOP)
+			process.stderr.printf("Process %d (%s) thread %d has stopped because of a %s\r\n", info.pid, info.label, tid, signalExpansion(stopSig))
+	}
+	
 	void exitCalled(time.Time at, manager.ProcessInfo info, int tid, int exitStatus) {
 		logger.format(at, log.INFO, "Process %d (%s), tid %d has called exit with exit status %d.", info.pid, info.label, tid, exitStatus)
 		process.stderr.printf("Process %d, thread %d has called exit with status %d.\r\n", info.pid, tid, exitStatus)
@@ -388,6 +396,14 @@ class Session implements manager.SessionNotifications, http.DisconnectListener {
 	void shutdown() {
 		logger.info("Manager notification of shutdown")
 	}
+}
+
+string signalExpansion(int stopSig) {
+	switch (stopSig) {
+	case linux.SIGSEGV:
+		return "Segmentation violation"
+	}
+	return sprintf("signal %d", stopSig)
 }
 
 /*

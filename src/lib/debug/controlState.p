@@ -27,7 +27,7 @@ monitor class ControlState {
 	manager.ProcessNotifications _notifier;
 	ref<thread.ThreadPool<boolean>> _backgroundTasks;
 	Set<int> _stoppedThreads;				// These are a map of thread ids that will probably get a process association soon.	
-	map<ref<ThreadInfo>, int> _threadMap;
+	map<ref<TracedThread>, int> _threadMap;
 	boolean _shuttingDown
 
 	ControlState() {
@@ -92,7 +92,7 @@ monitor class ControlState {
 		events.listen();
 	}
 
-	public void declareThread(ref<ThreadInfo> t) {
+	public void declareThread(ref<TracedThread> t) {
 		existing := _threadMap[t.tid()];
 		if (existing != null) {
 			if (existing != t)
@@ -102,7 +102,7 @@ monitor class ControlState {
 		_threadMap[t.tid()] = t;
 	}
 
-	public ref<ThreadInfo> findThread(int tid) {
+	public ref<TracedThread> findThread(int tid) {
 		return _threadMap[tid];
 	}
 

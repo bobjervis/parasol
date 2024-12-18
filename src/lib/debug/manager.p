@@ -163,6 +163,7 @@ class ProcessControl implements ProcessNotifications, http.DisconnectListener {
 
 	void stopped(time.Instant timestamp, int pid, int tid, int stopSig) {
 		logger.info("=== ProcessControl === Process %d thread %d stopped %d", pid, tid, stopSig);
+		managedState.stopped(this, timestamp, pid, tid, stopSig)
 	}
 
 	void exec(time.Instant timestamp, int pid) {
@@ -269,16 +270,17 @@ class Session extends SessionVolatileData implements SessionCommands, http.Disco
 		return managedState.getLogs(min, max);
 	}
 
-	ThreadInfo[] getThreads(int pid, unsigned ip) {
+	ThreadInfo[], boolean getThreads(int pid, unsigned ip) {
 		ThreadInfo[] info
 
 		p := managedState.getProcess(pid, ip)
 		if (p == null) {
 			logger.warn("no process matched pid %d ip %s", pid, net.dottedIP(ip))
-			return info
+			return info, false
 		}
-		logger.info("threads not recorded for pid %d ip %s", pid, net.dottedIP(ip))
-		return info
+		info = managedState.getThreads(p)
+		logger.info("threads recorded for pid %d ip %s", pid, net.dottedIP(ip))
+		return info, true
 	}
 
 	boolean resumeProcess(int pid, unsigned ip) {

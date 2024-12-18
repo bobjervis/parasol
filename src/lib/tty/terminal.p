@@ -188,7 +188,7 @@ public class Terminal {
 	 * @return The number of columns
 	 */
 	public int, int getWindowSize() {
-		return runtime.terminalSize();
+		return runtime.terminalSize(_fdo);
 	}
 
 	public void switchToAlternateBuffer() {

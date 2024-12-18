@@ -22,6 +22,7 @@ import parasol:process;
 import parasol:rpc;
 import parasol:time;
 import parasol:types.map;
+import native:linux
 
 import parasollanguage.org:debug;
 
@@ -137,10 +138,32 @@ monitor class ManagedState {
 		log(timestamp, "process pid %d spawned '%s'", pid, label)
 	}
 
+	public void stopped(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid, int stopSig) {
+		ps := _processes[{pid: pid, ip: source.socket.socket().connection().sourceIPv4()}];
+		if (ps != null) {
+			t := ps.getThread(tid)
+			if (t != null) {
+				t.state = ProcessState.STOPPED
+				t.stopSig = stopSig
+				for (i in _sessions) {
+					session := _sessions[i]
+					session.notifications.stopped(time.Time(timestamp), *ps, tid, stopSig)
+				}
+			} else
+				logger.error("Could not find thread %d", tid)
+		}
+	}
+	
 	public void afterExec(ref<ProcessControl> source, time.Instant timestamp, int pid) {
 		ps := _processes[{pid: pid, ip: source.socket.socket().connection().sourceIPv4()}];
 		if (ps != null) {
 			ps.state = ProcessState.STOPPED;
+			t := ps.getThread(pid)
+			if (t != null) {
+				t.state = ProcessState.STOPPED
+				t.stopSig = linux.SIGSTOP
+			} else
+				logger.error("Could not find thread %d", pid)
 			for (i in _sessions) {
 				session := _sessions[i];
 				session.notifications.afterExec(time.Time(timestamp), *ps);
@@ -179,6 +202,12 @@ monitor class ManagedState {
 
 	public void newThread(ref<ProcessControl> source, time.Instant timestamp, int pid, int tid) {
 		log(timestamp, "new thread pid %d tid %d", pid, tid)
+		p := getProcess(pid, source.socket.socket().connection().sourceIPv4())
+		if (p == null) {
+			logger.error("newThread found no process for pid %d", pid)
+			return
+		}
+		p.newThread(tid)
 	}
 
 
@@ -206,6 +235,10 @@ monitor class ManagedState {
 			info.append(*p);
 		}
 		return info;
+	}
+	
+	public ThreadInfo[] getThreads(ref<ProcessInfoInternal> p) {
+		return p.getThreads()
 	}
 
 	public LogInfo[] getLogs(int min, int max) {
@@ -246,23 +279,20 @@ monitor class ManagedState {
 				}
 			}
 		}
-		for (i in _processes) {
-			p := _processes[i];
-			if (p.pid == pid && p.ip == ip)
-				return p
-		}
-		return null
+		return _processes[{pid: pid, ip: ip}]
 	}
 }
 
 class ProcessInfoInternal extends ProcessInfo {
 	private ref<ProcessControl> _source;
+	private ref<ThreadInfoInternal>[] _threads;
 
 	ProcessInfoInternal(ref<ProcessControl> source, int pid, string label) {
 		this._source = source;
 		this.state = ProcessState.RUNNING;
 		this.pid = pid;
 		this.label = label;
+		this._threads.append(new ThreadInfoInternal(pid, ProcessState.RUNNING))
 		logger.info("new %d (%s)", pid, label)
 	}
 
@@ -273,4 +303,35 @@ class ProcessInfoInternal extends ProcessInfo {
 	public ref<ProcessControl> source() {
 		return _source
 	}
+	
+	public ThreadInfo[] getThreads() {
+		ThreadInfo[] info
+		
+		for (i in _threads)
+			info.append(*_threads[i])
+		return info
+	}
+	
+	public void newThread(int tid) {
+		t := new ThreadInfoInternal(tid, ProcessState.RUNNING)
+		logger.info("thread added at %d: %d", _threads.length(), tid)
+		_threads.append(t)
+	}
+	
+	public ref<ThreadInfoInternal> getThread(int tid) {
+		for (i in _threads) {
+			t := _threads[i]
+			if (t.tid == tid)
+				return t
+		}
+		return null
+	}
 }
+
+class ThreadInfoInternal extends ThreadInfo {
+	ThreadInfoInternal(int tid, ProcessState state) {
+		this.tid = tid
+		this.state = state
+	}	
+}
+ 

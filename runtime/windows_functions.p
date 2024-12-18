@@ -409,4 +409,22 @@ public ULONG BCRYPT_USE_SYSTEM_PREFERRED_RNG = 2;
 @Constant
 public NTSTATUS STATUS_SUCCESS = 0;
 
+public class COORD {
+	public short X;
+	public short Y;
+}
 
+public class SMALL_RECT {
+  public short Left;
+  public short Top;
+  public short Right;
+  public short Bottom;
+}
+
+public class CONSOLE_SCREEN_BUFFER_INFO {
+  public COORD      dwSize;
+  public COORD      dwCursorPosition;
+  public WORD       wAttributes;
+  public SMALL_RECT srWindow;
+  public COORD      dwMaximumWindowSize;
+}
