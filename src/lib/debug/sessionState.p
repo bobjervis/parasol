@@ -16,10 +16,13 @@
 namespace parasollanguage.org:debug.manager;
 
 import parasol:json
+import parasol:log
 import parasol:net;
 import parasol:process;
 import parasol:storage
 import parasollanguage.org:debug;
+
+private ref<log.Logger> logger = log.getLogger("manager.sessionState")
 
 class SessionState {
 
@@ -111,7 +114,7 @@ class SessionState {
 					if (argumentsV.class == ref<Array>) {
 						args := ref<Array>(argumentsV)
 						for (j in *args) {
-							argumentV := (*args)[i]
+							argumentV := (*args)[j]
 							if (argumentV.class == string)
 								arguments.append(string(argumentV))
 							else {
@@ -149,13 +152,14 @@ class SessionState {
 	boolean validateScript(string script) {
 		var parsedScript
 		boolean ok
+		logger.debug("validateScript(\"%s\")", script)
 		(parsedScript, ok) = json.parse(script)
 		if (!ok) {
-			printf("Could not parse script %s as json\n", script)
+			logger.error("Could not parse script %s as json", script)
 			return false
 		}
 		if (parsedScript.class != ref<Object>) {
-			printf("Script body is not a json Object.\n")
+			logger.error("Script body is not a json Object.")
 			return false;
 		}
 		object := ref<Object>(parsedScript)
@@ -172,12 +176,12 @@ class SessionState {
 						(*environment)[key] = string(value)
 				}
 			} else {
-				printf("The environment field of the script object is not itself a json Object.\n")
+				logger.error("The environment field of the script object is not itself a json Object.\n")
 				return false
 			}
 		}
 		for (key in *environment)
-			printf(" [%s] = %s\n", key, (*environment)[key])
+			logger.debug(" [%s] = %s", key, (*environment)[key])
 
 		ref<Array> applications
 		if (object.contains("applications")) {
@@ -185,11 +189,11 @@ class SessionState {
 			if (applicationsV.class == ref<Array>)
 				applications = ref<Array>(applicationsV)
 			else {
-				printf("The applications field of the script object is not itself a json Array.\n")
+				logger.error("The applications field of the script object is not itself a json Array.")
 				return false
 			}
 		} else {
-			printf("Script object must contain an applications field.\n")
+			logger.error("Script object must contain an applications field.")
 			return false
 		}
 
@@ -204,16 +208,16 @@ class SessionState {
 					if (argumentsV.class == ref<Array>) {
 						args := ref<Array>(argumentsV)
 						for (j in *args) {
-							argumentV := (*args)[i]
+							argumentV := (*args)[j]
 							if (argumentV.class == string)
 								arguments.append(string(argumentV))
 							else {
-								printf("Expecting argument %d of entry %d in applications to be a string\n")
+								logger.error("Expecting argument %d of entry %d in applications to be a string")
 								return false
 							}
 						}
 					} else {
-						printf("Expecting the arguments in applications entry %d to be an array\n")
+						logger.error("Expecting the arguments in applications entry %d to be an array")
 						return false
 					}
 				}
@@ -221,21 +225,21 @@ class SessionState {
 					nameV := (*application)["application"]
 					if (nameV.class == string) {
 						name := string(nameV)
-						printf("[%d] %s\n", i, name)
+						logger.debug("[%d] %s", i, name)
 						for (j in arguments)
-							printf("    [%d] '%s'\n", j, arguments[j])
+							logger.debug("    [%d] '%s'", j, arguments[j])
 							
 					} else {
-						printf("Expecting application name in entry %d of applications to be a string\n", i)
+						logger.error("Expecting application name in entry %d of applications to be a string", i)
 						return false;
 					} 
 				} else {
-					printf("Expecting to see an application field in entry %d of applications\n", i)
+					logger.error("Expecting to see an application field in entry %d of applications", i)
 					return false
 				}
 			}
 		}
-		printf("All validations pass\n");
+		logger.info("All validations pass")
 		return true
 	}
 }

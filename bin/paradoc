@@ -14,5 +14,5 @@ then
 	
 	exec "$PARASOL_HOME/bin/parasolrt" "$PARASOL_HOME/bin/paradoc.pxi" "$@"
 else
-	exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/paradoc/paradoc.p" "$@"
+	exec "$PARASOL_HOME/bin/pc" -i "$PARASOL_HOME"/src/lib/documentation "$PARASOL_HOME/src/cmd/paradoc.p" "$@"
 fi

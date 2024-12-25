@@ -1207,6 +1207,8 @@ public class Environment {
 	}
 	/**
 	 * Remove an environment variable
+	 *
+	 * @param key The name of the environment variable to remove.
 	 */
 	public void remove(string key) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -1221,6 +1223,9 @@ public class Environment {
 	 *
 	 * If the process' C environment has been corrupted, the list of returned environment 
 	 * variables will be truncated.
+	 *
+	 * @return A reference to a map of string to string containing the process C environment.
+	 * When the caller is done with the data, it should delete the returned reference.
 	 */
 	public ref<string[string]> fetch() {
 		result := new string[string]

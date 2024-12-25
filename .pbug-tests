@@ -1,1 +1,1 @@
-{"environment":{},"applcations":[{"application":"pbuild","arguments":["-t","1","--official"]}],"name":"pbuild official"}
+{"environment":{},"applications":[{"application":"pbuild","arguments":["-t","1","--official"]}],"name":"pbuild official"}
