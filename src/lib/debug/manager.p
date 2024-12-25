@@ -64,7 +64,7 @@ public int run(ref<debug.PBugOptions> options, string exePath, string... argumen
 			printf("Could not initialize script %s\n", options.scriptOption.value);
 			return 1;
 		}
-	} else {
+	} else if (exePath != null) {
 		printf("manager exePath '%s'\n", exePath);
 		for (i in arguments)
 			printf("arguments[%d] '%s'\n", i, arguments[i]);
@@ -256,6 +256,16 @@ class Session extends SessionVolatileData implements SessionCommands, http.Disco
 			logger.info("http server stopped")
 		}
 		return result;
+	}
+
+	boolean runScript(string name, string script) {
+		if (!sessionState.validateScript(script))
+			return false;
+		return true;
+	}
+
+	boolean stopScript(string name) {
+		return false;
 	}
 
 	ManagerInfo getManagerInfo() {

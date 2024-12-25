@@ -145,5 +145,98 @@ class SessionState {
 		printf("All validations pass\n");
 		return false
 	}
+
+	boolean validateScript(string script) {
+		var parsedScript
+		boolean ok
+		(parsedScript, ok) = json.parse(script)
+		if (!ok) {
+			printf("Could not parse script %s as json\n", script)
+			return false
+		}
+		if (parsedScript.class != ref<Object>) {
+			printf("Script body is not a json Object.\n")
+			return false;
+		}
+		object := ref<Object>(parsedScript)
+		environment := process.environment.fetch()
+		if (object.contains("environmen")) {
+			environmentV := (*object)["environment"]
+			if (environmentV.class == ref<Object>) {
+				env := ref<Object>(environmentV)
+				for (key in *env) {
+					value := (*env)[key]
+					if (value == null)
+						environment.remove(key)
+					else
+						(*environment)[key] = string(value)
+				}
+			} else {
+				printf("The environment field of the script object is not itself a json Object.\n")
+				return false
+			}
+		}
+		for (key in *environment)
+			printf(" [%s] = %s\n", key, (*environment)[key])
+
+		ref<Array> applications
+		if (object.contains("applications")) {
+			applicationsV := (*object)["applications"]
+			if (applicationsV.class == ref<Array>)
+				applications = ref<Array>(applicationsV)
+			else {
+				printf("The applications field of the script object is not itself a json Array.\n")
+				return false
+			}
+		} else {
+			printf("Script object must contain an applications field.\n")
+			return false
+		}
+
+		for (i in *applications) {
+			applicationV := (*applications)[i]
+			if (applicationV.class == ref<Object>) {
+				application := ref<Object>(applicationV)
+				
+				string[] arguments 
+				if (application.contains("arguments")) {
+					argumentsV := (*application)["arguments"]
+					if (argumentsV.class == ref<Array>) {
+						args := ref<Array>(argumentsV)
+						for (j in *args) {
+							argumentV := (*args)[i]
+							if (argumentV.class == string)
+								arguments.append(string(argumentV))
+							else {
+								printf("Expecting argument %d of entry %d in applications to be a string\n")
+								return false
+							}
+						}
+					} else {
+						printf("Expecting the arguments in applications entry %d to be an array\n")
+						return false
+					}
+				}
+				if (application.contains("application")) {
+					nameV := (*application)["application"]
+					if (nameV.class == string) {
+						name := string(nameV)
+						printf("[%d] %s\n", i, name)
+						for (j in arguments)
+							printf("    [%d] '%s'\n", j, arguments[j])
+							
+					} else {
+						printf("Expecting application name in entry %d of applications to be a string\n", i)
+						return false;
+					} 
+				} else {
+					printf("Expecting to see an application field in entry %d of applications\n", i)
+					return false
+				}
+			}
+		}
+		printf("All validations pass\n");
+		return true
+	}
 }
 

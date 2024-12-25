@@ -670,7 +670,7 @@ public class TracedThread {
 	public void printStackTrace() {
 		logger.info("Stack trace for thread %s", label());
 		regs := registers();
-		mm := process().loadMemory();
+		mm := _process.loadMemory();
 
 		ref<MemorySegment> seg
 		ref<elf.Elf64_Sym> sym;

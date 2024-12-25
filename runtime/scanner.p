@@ -1601,7 +1601,6 @@ public class Scanner {
 		switch (current) {
 		case SEMI_COLON:
 		case COMMA:
-		case TILDE:
 		case SP_LA:
 		case SP_RA:
 		case LEFT_ANGLE:

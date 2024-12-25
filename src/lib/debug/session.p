@@ -70,6 +70,32 @@ public interface SessionCommands {
 	 * are sent a SIGKILL immediately.
 	 */
 	boolean shutdown(time.Duration timeout);
+	/**
+	 * Run a new script.
+	 *
+	 * The UI can opt to run a script at any time, which implies that
+	 * new instances of the descrbed processes will be creaated, even if the same
+	 * script has already been run.
+	 *
+	 * If the script is well-formed, names known applications and includes a defined
+	 * working directory, the applications are launched under the debugger and will pause
+	 * each launched process to permit the user an opportunity to set breakpoints.
+	 *
+	 * @param name A unique name for the script to be run.
+	 * @param script The script to be run.
+	 *
+	 * @return true if the name does not currently nme a running test, the script is well=formed, and names known, runnable applications,
+	 * false otherwise.
+	 */
+	boolean runScript(string name, string script)
+	/**
+	 * Stop a test script, terminating any running processes.
+	 *
+	 * @param name The name of a previously defined, running test.
+	 *
+	 * @return true if the named test was successfully stopped, false otherwise.
+	 */
+	boolean stopScript(string name)
 
 	// Queries
 

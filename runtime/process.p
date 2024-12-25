@@ -270,6 +270,8 @@ public class Process extends ProcessVolatileData {
 
 	private boolean _setpgrp;
 	private StdioHandling _stdioHandling;
+	private void(address, ref<Process>, int) _exitHandler;
+	private address _exitHandlerArgument;
 	private linux.uid_t _user;
 	private int _fdLimit;
 	/**
@@ -329,6 +331,25 @@ public class Process extends ProcessVolatileData {
 	 */
 	public void runInteractive() {
 		_stdioHandling = StdioHandling.INTERACTIVE;
+	}
+	/**
+	 * Register an exit handler.
+	 *
+	 * Rather than have the spawing process explciitly wait on termination of the process, this
+	 * method registers an exit handler callback function. When the process termination arrives,
+ 	 * the handler will be called with the process object that exited and the exit status it
+	 * returned.
+	 *
+	 * The Process object itself will not be referenced again after the exit handler function
+	 * returns, so it is free to delete the Process object.
+	 *
+	 * @param exitHandler A function that will be called with the process object and an exit
+	 * status.
+	 * @param arg An address value to be passed to the exitHandler function.
+	 */
+	public void onExit(void(address, ref<Process>, int) exitHandler, address arg) {
+		_exitHandler = exitHandler;
+		_exitHandlerArgument = arg;
 	}
 	/**
 	 * Set the user name of the spawned process.
@@ -867,8 +888,11 @@ public class Process extends ProcessVolatileData {
 		lock (*this) {
 			_running = false;
 			_exitStatus = exitCode;
-			notifyAll();
+			if (_exitHandler == null)
+				notifyAll();
 		}
+		if (_exitHandler != null)
+			_exitHandler(_exitHandlerArgument, this, exitCode);
 	}
 	/**
 	 * Allow a sub-class of Process to define a startup method hook.

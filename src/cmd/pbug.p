@@ -134,8 +134,11 @@ public int main(string[] args) {
 		}
 		exePath = a.targetPath();
 	} else if (arguments.length() == 0) {
-		printf("No application to run\n");
-		return 1;
+		// Launching the manager with no arguments is fine.
+		if (!pbugCommand.options.managerOption.set()) {
+			printf("No application to run\n");
+			return 1;
+		}
 	} else {
 		exePath = arguments[0];
 		arguments.remove(0);
