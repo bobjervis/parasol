@@ -259,9 +259,21 @@ class Session extends SessionVolatileData implements SessionCommands, http.Disco
 	}
 
 	boolean runScript(string name, string script) {
-		if (!sessionState.validateScript(script))
+		parsedScript := sessionState.validateScript(script)
+		if (parsedScript == null)
 			return false;
-		return true;
+		
+		success := true
+		for (i in parsedScript.applications) {
+			application := parsedScript.applications[i]
+			if (!sessionState.debugApplication(parsedScript, application)) {
+				logger.error("Could not launch controller for application %s", application.application)
+				success = false
+			}
+		}
+
+		delete parsedScript
+		return success
 	}
 
 	boolean stopScript(string name) {

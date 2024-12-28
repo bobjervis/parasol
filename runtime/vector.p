@@ -1006,7 +1006,11 @@ public class map<class V, class K> {
 		for (iterator i = other.begin(); i.hasNext(); i.next())
 			set(i.key(), i.get());
 	}
-
+	/**
+	 * Return the number of key-value pairs in the map
+	 *
+	 * @return a non-negative count of the key-value pairs in the map.
+	 */
 	public int size() {
 		return _entriesCount - _deletedEntriesCount;
 	}

@@ -382,7 +382,7 @@ performs many different functions.
                       line is to be constructed by copying recursively the
                       contents of the directory named by this option. Each file
                       with a .ph extension is processed by paradoc and replaced
-                      by a file with the same name, but with a .html extension.
+                      by a file with the same name, but with an .html extension.
 </td></tr>
 <tr><td>-?</td><td>--help</td><td>Displays a simplified version of this help.</td></tr>
 <tr><td></td><td><nobr>--logImports</nobr></td><td>Log all import processing</td></tr>
@@ -393,6 +393,7 @@ performs many different functions.
                       generated HTML and can be customized without modifying the
                       program code.</td></tr>
 </table>
+
 
 The given input directories are analyzed as a set of Parasol libraries.
 <p>

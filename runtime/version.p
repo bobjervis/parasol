@@ -77,8 +77,8 @@ public class Version {
 	 * 		   </ul>
 	 */
 	int compare(Version other) {
-		unsigned[] leftComponents = components();
-		unsigned[] rightComponents = other.components();
+		leftComponents := components();
+		rightComponents := other.components();
 	
 		if (leftComponents.length() >= rightComponents.length()) {
 			for (i in rightComponents) {
@@ -101,14 +101,14 @@ public class Version {
 		return 0;
 	}
 
-	public unsigned[] components() {
-		unsigned[] output;
+	public long[] components() {
+		long[] output;
 
 		if (_version == null)
 			return output;
 		s := _version.split('.');
 		for (i in s) {
-			component := unsigned.parse(s[i]);
+			component := long.parse(s[i]);
 			output.append(component);
 		}
 		return output;
@@ -127,7 +127,7 @@ public class Version {
 	 *		period character.
 	 *	   <li>Each sub-sequence of digits begins with a zero digit only if it 
 	 *		is the only character in the sequence.
-	 *	   <li>The value of each digit sub-sequence can be prepresented by a
+	 *	   <li>The value of each digit sub-sequence can be represented by a
 	 *		Parasol {@link long} object.
 	 * </ul>
 	 *
@@ -245,11 +245,11 @@ string[] versions(string packageDir) {
 				components := ss.split('.');
 				boolean valid = true;
 				for (j in components) {
-					unsigned x;
+					long x;
 					boolean success;
 		
-					(x, valid) = unsigned.parse(components[j]);
-					if (!valid)
+					(x, valid) = long.parse(components[j]);
+					if (!valid || x < 0)
 						break;
 				}
 				if (!valid)

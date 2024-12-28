@@ -30,6 +30,7 @@ public class PBugOptions {
 	public ref<process.Option<boolean>> verboseOption;
 	public ref<process.Option<boolean>> elisionOption;
 	public ref<process.Option<boolean>> semiOption;
+	public ref<process.Option<string>> environmentOption;
 
 	PBugOptions(ref<process.Command> command) {
 		processOption = command.integerOption('p', "process", "The id of a running process that is not already " +
@@ -56,6 +57,8 @@ public class PBugOptions {
 					"Join a running debug session. The string argument is the host:port identity of a running debug session.");
 		elisionOption = command.booleanOption('e', "elide", "Enables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
 		semiOption = command.booleanOption(0, "semi-colon", "Disables semi-colon elision (default " + string(compiler.semiColonElision) + ")");
+		environmentOption = command.stringOption(0, "environment", "Provides a json object taining the environment " +
+					"variables to add when spawning the target processes.")
 	}
 
 	public string[] copiedOptions() {

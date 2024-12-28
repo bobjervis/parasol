@@ -14,6 +14,6 @@ then
 	
 	exec "$PARASOL_HOME/bin/parasolrt" "$PARASOL_HOME/bin/pcontext.pxi" "$@"
 else
-	exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/pcontext/main.p" "$@"
+	exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/cmd/pcontext.p" "$@"
 fi
 

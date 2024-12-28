@@ -149,6 +149,10 @@ class Ls extends process.Command {
 						versions.sort(context.versionCompare, false);
 						for (j in versions) {
 							p := c.getPackage(name, versions[j]);
+							if (p == null) {
+								printf("ERROR %s %s is in the versions list but get won't retrieve it.\n", name, versions[j]);
+								continue;
+							}
 							time.Instant accessed, modified, created;
 							boolean success;
 				

@@ -225,9 +225,6 @@ public class Context {
 	 * Retrieve a specific version of the named package from this context.
 	 */
 	public ref<Package> getPackage(string name, string version) {
-		ref<Package> p = _packages[name];
-		if (p != null)
-			return p;
 		if (!validatePackageName(name))
 			return null;
 		// If the default context has never been modified, it won't have a directory
@@ -237,8 +234,7 @@ public class Context {
 			versionDir := storage.path(packageDir, "v" + version);
 			if (!storage.isDirectory(versionDir))
 				return null;
-			p = new Package(this, name, versionDir);
-			_packages[name] = p;
+			p := new Package(this, name, versionDir);
 			return p;
 		}
 		return null;

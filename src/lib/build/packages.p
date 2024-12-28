@@ -93,7 +93,7 @@ class Product extends Folder {
 		return false;
 	}
 
-	string buildDir() {
+	public string buildDir() {
 		return _buildDir;
 	}
 

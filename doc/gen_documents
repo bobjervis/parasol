@@ -24,17 +24,55 @@ then
     echo Use is: gen_documents '<output-directory>'
 	exit 1
 fi
-cd $PARASOL_HOME
+cd $PARASOL_HOME/..
 pbuild
 pcontext create -p docs
 export PARASOL_CONTEXT=docs
-if ! ( pcontext install build/build_parasollanguage.org )
+if ! ( pcontext install parasol/build/core_parasollanguage.org )
+then
+	echo Installation failed for core:parasollanguage.org - ignoring
+fi
+if ! ( pcontext install parasol/build/build_parasollanguage.org )
 then
 	echo Installation failed for build:parasollanguage.org - ignoring
 fi
-if ! ( pcontext install build/debug_parasollanguage.org )
+if ! ( pcontext install parasol/build/debug_parasollanguage.org )
 then
     echo Installation failed for debug:parasollanguage.org - ignoring
 fi
-paradoc -c $PARASOL_HOME/doc/parasol -h Parasol $1 core:parasollanguage.org build:parasollanguage.org debug:parasollanguage.org
+if ! ( pcontext install parasol/build/documentation_parasollanguage.org )
+then
+    echo Installation failed for documentation:parasollanguage.org - ignoring
+fi
+if ! ( pcontext install parasol/build/tty_parasollanguage.org )
+then
+    echo Installation failed for tty:parasollanguage.org - ignoring
+fi
+
+if ! ( pcontext install wizard-common/build/common_wizardsystemssoftware.com )
+then
+    echo Installation failed for common:wizardsystemssoftware.com - ignoring
+fi
+if ! ( pcontext install alys/build/alys-client_wizardsystemssoftware.com )
+then
+    echo Installation failed for alys-client:wizardsystemssoftware.com - ignoring
+fi
+if ! ( pcontext install alys/build/alys-lib_wizardsystemssoftware.com )
+then
+    echo Installation failed for alys-lib:wizardsystemssoftware.com - ignoring
+fi
+if ! ( pcontext install imagine/build/editor_wizardsystemssoftware.com )
+then
+    echo Installation failed for editor:wizardsystemssoftware.com - ignoring
+fi
+paradoc -c $PARASOL_HOME/doc/parasol -h Parasol -f $1 core:parasollanguage.org \
+				build:parasollanguage.org \
+				debug:parasollanguage.org \
+				documentation:parasollanguage.org \
+				tty:parasollanguage.org \
+				debug:parasollanguage.org \
+				common:wizardsystemssoftware.com \
+				alys-client:wizardsystemssoftware.com \
+				alys-lib:wizardsystemssoftware.com \
+				editor:wizardsystemssoftware.com
 
